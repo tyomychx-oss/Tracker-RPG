@@ -1,0 +1,79 @@
+"use client"
+
+import { useEffect, useRef, useState } from "react"
+import { createClient } from "@/utils/supabase/client"
+import { 
+  useXP, 
+  useQuests, 
+  useSkillXP, 
+  useSkillColors, 
+  useRecentActivity, 
+  useUIColor, 
+  useNickname 
+} from "@/components/providers"
+
+export function DatabaseSync() {
+  const { totalXP, currentLevel, maxXP } = useXP()
+  const { quests } = useQuests()
+  const { skillXPs } = useSkillXP()
+  const { skillColors } = useSkillColors()
+  const { activities } = useRecentActivity()
+  const { uiColor } = useUIColor()
+  const { nickname } = useNickname()
+  
+  const [status, setStatus] = useState<"saved" | "saving" | "error">("saved")
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  useEffect(() => {
+    // Якщо нікнейму немає, значить юзер ще не завантажився або не залогінений
+    if (!nickname) return
+
+    setStatus("saving")
+
+    // Debounce: чекаємо 2 секунди після останньої зміни, щоб не спамити базу
+    if (timeoutRef.current) clearTimeout(timeoutRef.current)
+
+    timeoutRef.current = setTimeout(async () => {
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+
+      if (!session) return
+
+      const { error } = await supabase
+        .from("user_profiles")
+        .upsert({
+          user_id: session.user.id,
+          nickname,
+          total_xp: totalXP,
+          current_level: currentLevel,
+          max_xp: maxXP,
+          quests,
+          skill_xps: skillXPs,
+          skill_colors: skillColors,
+          activities,
+          ui_color: uiColor,
+          updated_at: new Date().toISOString(),
+        })
+
+      if (error) {
+        console.error("Sync error:", error)
+        setStatus("error")
+      } else {
+        setStatus("saved")
+      }
+    }, 2000) // Зберігаємо через 2 сек після зупинки дій
+
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current)
+    }
+  }, [totalXP, currentLevel, maxXP, quests, skillXPs, skillColors, activities, uiColor, nickname])
+
+  // Маленький індикатор в кутку екрану
+  return (
+    <div className="fixed bottom-2 right-2 text-xs opacity-50 font-mono pointer-events-none z-50">
+      {status === "saving" && "☁️ Saving..."}
+      {status === "saved" && "✓ Synced"}
+      {status === "error" && "⚠️ Sync Error"}
+    </div>
+  )
+}

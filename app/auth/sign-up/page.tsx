@@ -1,0 +1,178 @@
+"use client"
+
+import { useState } from "react"
+import { useRouter } from "next/navigation"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { createClient } from "@/utils/supabase/client"
+import { Mail, Chrome } from "lucide-react"
+import Link from "next/link"
+
+export default function SignUpPage() {
+  const router = useRouter()
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [nickname, setNickname] = useState("")
+  const [error, setError] = useState("")
+  const [loading, setLoading] = useState(false)
+
+  const handleSignUp = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError("")
+    setLoading(true)
+
+    if (!nickname.trim()) {
+      setError("Nickname is required")
+      setLoading(false)
+      return
+    }
+
+    try {
+      const supabase = createClient()
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            nickname: nickname.trim(),
+          },
+        },
+      })
+
+      if (signUpError) {
+        if (signUpError.message.includes("already registered")) {
+          setError("An account with this email already exists")
+        } else {
+          setError(signUpError.message)
+        }
+        setLoading(false)
+        return
+      }
+
+      if (data.user) {
+        // Store nickname in user metadata for later use
+        await supabase.auth.updateUser({
+          data: { nickname: nickname.trim() }
+        })
+
+        router.push("/")
+        router.refresh()
+      }
+    } catch (err) {
+      setError("An unexpected error occurred")
+      setLoading(false)
+    }
+  }
+
+  const handleGoogleSignUp = async () => {
+    setError("")
+    setLoading(true)
+
+    try {
+      const supabase = createClient()
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      })
+
+      if (error) {
+        setError(error.message)
+        setLoading(false)
+      }
+    } catch (err) {
+      setError("An unexpected error occurred")
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <Card className="bg-card border-border w-full max-w-md">
+        <CardHeader>
+          <CardTitle className="text-2xl font-bold text-center font-mono text-primary">
+            SIGN UP
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {error && (
+            <div className="p-3 bg-red-500/10 border border-red-500/50 rounded-md text-red-500 text-sm">
+              {error}
+            </div>
+          )}
+
+          <form onSubmit={handleSignUp} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="nickname" className="text-foreground">
+                Nickname
+              </Label>
+              <Input
+                id="nickname"
+                type="text"
+                value={nickname}
+                onChange={(e) => setNickname(e.target.value)}
+                className="bg-input"
+                placeholder="Your name"
+                required
+                disabled={loading}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="email" className="text-foreground">
+                Email
+              </Label>
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="bg-input"
+                placeholder="your@email.com"
+                required
+                disabled={loading}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="password" className="text-foreground">
+                Password
+              </Label>
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="bg-input"
+                placeholder="••••••••"
+                required
+                minLength={6}
+                disabled={loading}
+              />
+            </div>
+
+            <Button
+              type="submit"
+              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
+              disabled={loading}
+            >
+              <Mail className="mr-2 h-4 w-4" />
+              {loading ? "Signing up..." : "Sign Up"}
+            </Button>
+          </form>
+
+          <div className="text-center text-sm text-muted-foreground">
+            Already have an account?{" "}
+            <Link href="/auth/sign-in" className="text-primary hover:underline">
+              Sign in
+            </Link>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+

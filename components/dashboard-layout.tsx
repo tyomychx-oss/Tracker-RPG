@@ -152,6 +152,16 @@ function StatisticsView({ uiColor }: { uiColor: string }) {
   const { quests } = useQuests()
   const { totalXP, currentLevel } = useXP()
 
+  // Calculate accumulated XP (Total XP across all levels)
+  let accumulatedXP = totalXP
+  let tempLevel = 1
+  let tempMax = 200
+  while (tempLevel < currentLevel) {
+    accumulatedXP += tempMax
+    tempLevel += 1
+    tempMax = Math.floor(tempMax * 1.4)
+  }
+
   if (!hasSkills) {
     return (
       <div className="max-w-7xl">
@@ -333,6 +343,7 @@ function StatisticsView({ uiColor }: { uiColor: string }) {
                   />
                   <YAxis tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }} />
                   <Tooltip
+                    cursor={{ fill: 'rgba(0, 0, 0, 0.2)' }}
                     content={({ active, payload }) => {
                       // #region agent log
                       fetch('http://127.0.0.1:7242/ingest/252e63c3-cf19-4629-b606-81d571c6b361',{
@@ -391,6 +402,7 @@ function StatisticsView({ uiColor }: { uiColor: string }) {
                   />
                   <YAxis tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }} />
                   <Tooltip
+                    cursor={{ fill: 'rgba(0, 0, 0, 0.2)' }}
                     content={({ active, payload }) => {
                       // #region agent log
                       fetch('http://127.0.0.1:7242/ingest/252e63c3-cf19-4629-b606-81d571c6b361',{
@@ -455,6 +467,7 @@ function StatisticsView({ uiColor }: { uiColor: string }) {
                   />
                   <YAxis tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }} />
                   <Tooltip
+                    cursor={{ fill: 'rgba(0, 0, 0, 0.2)' }}
                     content={({ active, payload }) => {
                       // #region agent log
                       fetch('http://127.0.0.1:7242/ingest/252e63c3-cf19-4629-b606-81d571c6b361',{
@@ -501,7 +514,7 @@ function StatisticsView({ uiColor }: { uiColor: string }) {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-foreground">{totalXP.toLocaleString()}</div>
+            <div className="text-3xl font-bold text-foreground">{accumulatedXP.toLocaleString()}</div>
             <p className="text-sm text-muted-foreground mt-2">Level {currentLevel}</p>
           </CardContent>
         </Card>

@@ -7,8 +7,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
-import { Pencil, Plus, Trash2 } from "lucide-react"
+import { Pencil, Plus, Trash2, Archive, ChevronDown, ChevronUp } from "lucide-react"
 import { useSkillColors, useSkillFilter, useUIColor, useSkillXP, useSkills } from "@/components/providers"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 const BASIC_COLORS = [
   "#ef4444",
@@ -30,7 +31,7 @@ export function SkillsListEditable() {
   const { selectedSkill, setSelectedSkill } = useSkillFilter()
   const { uiColor } = useUIColor()
   const { skillXPs, addSkillXP } = useSkillXP()
-  const { skills: skillsList, addSkill, removeSkill } = useSkills()
+  const { skills: skillsList, archivedSkills: archivedList, addSkill, removeSkill, archiveSkill, unarchiveSkill } = useSkills()
   const [editingSkill, setEditingSkill] = useState<string | null>(null)
   const [editingSkillName, setEditingSkillName] = useState("")
   const [selectedColor, setSelectedColor] = useState<string>("")
@@ -39,8 +40,15 @@ export function SkillsListEditable() {
   const [newSkillName, setNewSkillName] = useState("")
   const [newSkillColor, setNewSkillColor] = useState("#de6550")
   const [deletingSkill, setDeletingSkill] = useState<string | null>(null)
+  const [showArchived, setShowArchived] = useState(false)
 
   const skills = skillsList.map((name) => {
+    const xp = skillXPs[name] || 0
+    const level = Math.floor(xp / 100) + 1
+    return { name, level, xp }
+  })
+
+  const archivedSkills = archivedList.map((name) => {
     const xp = skillXPs[name] || 0
     const level = Math.floor(xp / 100) + 1
     return { name, level, xp }
@@ -112,12 +120,22 @@ export function SkillsListEditable() {
     setDeletingSkill(null)
   }
 
+  const handleArchive = (skillName: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    archiveSkill(skillName)
+  }
+
+  const handleUnarchive = (skillName: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    unarchiveSkill(skillName)
+  }
+
   return (
     <>
       <Card className="bg-card border-border">
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="font-mono" style={{ color: uiColor }}>
-            ACTIVE SKILLS
+            Setting Skills
           </CardTitle>
           <Button variant="ghost" size="sm" onClick={handleCreateSkill} className="h-8 w-8 p-0 hover:bg-secondary">
             <Plus className="h-4 w-4" />
@@ -126,7 +144,7 @@ export function SkillsListEditable() {
         <CardContent className="space-y-3">
           {skills.length === 0 ? (
             <div className="text-muted-foreground text-sm text-center py-4">
-              No skills yet. Click + to create your first skill!
+              No active skills. Click + to create a skill!
             </div>
           ) : (
             skills.map((skill, index) => (
@@ -137,34 +155,122 @@ export function SkillsListEditable() {
                 }`}
                 onClick={() => handleSkillClick(skill.name)}
               >
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-12">
                   <span className="font-semibold text-foreground">{skill.name}</span>
-                  <span className="text-sm text-muted-foreground">Level {skill.level}</span>
-                  <span className="text-sm text-muted-foreground">{skill.xp} XP</span>
+                  <div className="flex gap-4">
+                    <span className="text-sm text-muted-foreground">Level {skill.level}</span>
+                    <span className="text-sm text-muted-foreground">{skill.xp} XP</span>
+                  </div>
                 </div>
                 <div className="flex items-center gap-1">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={(e) => handleDeleteClick(skill.name, e)}
-                    className="h-8 w-8 p-0 hover:bg-secondary"
-                  >
-                    <Trash2 className="h-4 w-4 text-white" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleEdit(skill.name)
-                    }}
-                    className="h-8 w-8 p-0 hover:bg-secondary"
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </Button>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => handleArchive(skill.name, e)}
+                          className="h-8 w-8 p-0 hover:bg-secondary"
+                        >
+                          <Archive className="h-4 w-4 text-white" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Archive</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => handleDeleteClick(skill.name, e)}
+                          className="h-8 w-8 p-0 hover:bg-secondary"
+                        >
+                          <Trash2 className="h-4 w-4 text-white" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Delete</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleEdit(skill.name)
+                          }}
+                          className="h-8 w-8 p-0 hover:bg-secondary"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Edit</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 </div>
               </div>
             ))
+          )}
+
+          {archivedSkills.length > 0 && (
+            <div className="pt-4 mt-4 border-t border-border">
+              <button
+                onClick={() => setShowArchived(!showArchived)}
+                className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 w-full justify-center transition-colors mb-2"
+              >
+                Archive {showArchived ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </button>
+
+              {showArchived && (
+                <div className="space-y-3">
+                  {archivedSkills.map((skill, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center justify-between py-2 border-b border-border last:border-0 px-2 -mx-2 opacity-75"
+                    >
+                      <div className="flex items-center gap-12">
+                        <span className="font-semibold text-muted-foreground">{skill.name}</span>
+                        <div className="flex gap-4">
+                          <span className="text-sm text-muted-foreground">Level {skill.level}</span>
+                          <span className="text-sm text-muted-foreground">{skill.xp} XP</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => handleUnarchive(skill.name, e)}
+                                className="h-8 w-8 p-0 hover:bg-secondary"
+                              >
+                                <Archive className="h-4 w-4 text-white rotate-180" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Unarchive</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
         </CardContent>
       </Card>

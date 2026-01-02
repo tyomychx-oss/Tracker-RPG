@@ -6,9 +6,10 @@ import { SettingsPage } from "@/components/settings-page"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
-import { LayoutDashboard, Zap, BarChart3, Settings, LogOut } from "lucide-react"
+import { LayoutDashboard, Zap, BarChart3, Settings, LogOut, Menu } from "lucide-react"
 import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { useNickname, useUIColor, useXP, useSkills, useSkillXP, useSkillColors, useRecentActivity, useQuests } from "@/components/providers"
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, LineChart, Line } from "recharts"
 import { DatabaseSync } from "@/components/database-sync"
@@ -37,88 +38,105 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       .slice(0, 2)
   }
 
+  const SidebarContent = () => (
+    <div className="flex flex-col h-full">
+      <div className="p-6 border-b border-sidebar-border">
+        <h1 className="text-xl font-bold text-primary font-mono">RPG Life Tracker</h1>
+        <p className="text-xs text-muted-foreground mt-1">TRACKER v1.0</p>
+      </div>
+      <nav className="flex-1 p-4 space-y-2">
+        {navigation.map((item) => (
+          <Button
+            key={item.name}
+            variant={activeNav === item.name ? "default" : "ghost"}
+            className="w-full justify-start transition-colors"
+            style={
+              activeNav === item.name
+                ? {
+                    backgroundColor: uiColor,
+                    color: "white",
+                  }
+                : undefined
+            }
+            onMouseEnter={(e) => {
+              if (activeNav !== item.name) {
+                e.currentTarget.style.backgroundColor = `${uiColor}33`
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (activeNav !== item.name) {
+                e.currentTarget.style.backgroundColor = "transparent"
+              }
+            }}
+            onClick={() => setActiveNav(item.name)}
+          >
+            <item.icon className="mr-3 h-4 w-4" />
+            {item.name}
+          </Button>
+        ))}
+      </nav>
+      <div className="p-4 border-t border-sidebar-border">
+        <Button
+          variant="ghost"
+          className="w-full justify-start text-foreground hover:bg-muted transition-colors"
+          onClick={async () => {
+            const { createClient } = await import("@/utils/supabase/client")
+            const supabase = createClient()
+            await supabase.auth.signOut()
+            window.location.href = "/auth/sign-in"
+          }}
+        >
+          <LogOut className="mr-3 h-4 w-4" />
+          Log out
+        </Button>
+      </div>
+    </div>
+  )
+
   return (
     <div className="min-h-screen bg-background flex">
       <DatabaseSync />
-      {/* Sidebar */}
-      <aside className="w-64 bg-sidebar border-r border-sidebar-border flex flex-col">
-        <div className="p-6 border-b border-sidebar-border">
-          <h1 className="text-xl font-bold text-primary font-mono">VIBECODING</h1>
-          <p className="text-xs text-muted-foreground mt-1">TRACKER v1.0</p>
-        </div>
-        <nav className="flex-1 p-4 space-y-2">
-          {navigation.map((item) => (
-            <Button
-              key={item.name}
-              variant={activeNav === item.name ? "default" : "ghost"}
-              className="w-full justify-start transition-colors"
-              style={
-                activeNav === item.name
-                  ? {
-                      backgroundColor: uiColor,
-                      color: "white",
-                    }
-                  : undefined
-              }
-              onMouseEnter={(e) => {
-                if (activeNav !== item.name) {
-                  e.currentTarget.style.backgroundColor = `${uiColor}33`
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (activeNav !== item.name) {
-                  e.currentTarget.style.backgroundColor = "transparent"
-                }
-              }}
-              onClick={() => setActiveNav(item.name)}
-            >
-              <item.icon className="mr-3 h-4 w-4" />
-              {item.name}
-            </Button>
-          ))}
-        </nav>
-        <div className="p-4 border-t border-sidebar-border">
-          <Button
-            variant="ghost"
-            className="w-full justify-start text-white hover:bg-white/10 transition-colors"
-            onClick={async () => {
-              const { createClient } = await import("@/utils/supabase/client")
-              const supabase = createClient()
-              await supabase.auth.signOut()
-              window.location.href = "/auth/sign-in"
-            }}
-          >
-            <LogOut className="mr-3 h-4 w-4" />
-            Log out
-          </Button>
-        </div>
+      {/* Desktop Sidebar */}
+      <aside className="w-64 bg-sidebar border-r border-sidebar-border hidden md:flex flex-col">
+        <SidebarContent />
       </aside>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col w-full">
         {/* Header */}
-        <header className="bg-card border-b border-border px-8 py-4">
-          <div className="flex items-center justify-between">
+        <header className="bg-card border-b border-border px-4 py-4 md:px-8">
+          <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-4">
-              <Avatar className="h-12 w-12 border-2 border-primary">
+              <Sheet>
+                <SheetTrigger asChild>
+                  <Button variant="ghost" size="icon" className="md:hidden">
+                    <Menu className="h-6 w-6" />
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="left" className="p-0 w-64 bg-sidebar border-r border-sidebar-border">
+                  <SidebarContent />
+                </SheetContent>
+              </Sheet>
+              
+              <Avatar className="h-10 w-10 md:h-12 md:w-12 border-2 border-primary">
                 <AvatarFallback className="bg-primary/20 text-primary font-bold">
                   {getInitials(nickname)}
                 </AvatarFallback>
               </Avatar>
-              <div>
+              <div className="hidden sm:block">
                 <h2 className="text-lg font-semibold">{nickname}</h2>
                 <p className="text-sm text-muted-foreground">Level {currentLevel} Tracker</p>
               </div>
             </div>
 
-            <div className="flex-1 max-w-md ml-8">
+            <div className="flex-1 max-w-md ml-4 md:ml-8">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-mono text-primary">LEVEL {currentLevel}</span>
-                <span className="text-xs text-muted-foreground font-mono">
+                <span className="text-xs md:text-sm font-mono text-primary">LEVEL {currentLevel}</span>
+                <span className="text-[10px] md:text-xs text-muted-foreground font-mono">
                   {totalXP} / {maxXP} XP
                 </span>
               </div>
-              <Progress value={xpProgress} className="h-3 bg-secondary">
+              <Progress value={xpProgress} className="h-2 md:h-3 bg-secondary">
                 <div
                   className="h-full bg-gradient-to-r from-primary to-accent transition-all"
                   style={{ width: `${xpProgress}%` }}
@@ -129,7 +147,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 p-8">
+        <main className="flex-1 p-4 md:p-8 overflow-auto">
           {activeNav === "Main" && children}
           {activeNav === "Statistics" && <StatisticsContent uiColor={uiColor} />}
           {activeNav === "Skills" && <SkillsListEditable />}
@@ -150,18 +168,17 @@ function StatisticsView({ uiColor }: { uiColor: string }) {
   const { skillColors } = useSkillColors()
   const { activities } = useRecentActivity()
   const { quests } = useQuests()
-  const { totalXP, currentLevel } = useXP()
+  const { totalXP, currentLevel, maxXP } = useXP()
 
-  // Calculate accumulated XP (Total XP across all levels)
   let accumulatedXP = totalXP
   let tempLevel = 1
-  let tempMax = 200
+  let tempMax = 200 // або твоє стартове значення
   while (tempLevel < currentLevel) {
     accumulatedXP += tempMax
     tempLevel += 1
-    tempMax = Math.floor(tempMax * 1.4)
+    tempMax = Math.floor(tempMax * 1.4) // або твоя формула прогресії
   }
-
+  
   if (!hasSkills) {
     return (
       <div className="max-w-7xl">
@@ -203,22 +220,40 @@ function StatisticsView({ uiColor }: { uiColor: string }) {
   }))
 
   // Prepare data for daily XP progress
-  const dailyXPData: Record<string, number> = {}
+  const dailyXPData: Record<string, { total: number; tasks: number; daily: number; habits: number }> = {}
   activities.forEach((activity) => {
     if (activity.xp && activity.xp > 0) {
       const date = new Date(activity.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-      dailyXPData[date] = (dailyXPData[date] || 0) + activity.xp
+      if (!dailyXPData[date]) {
+        dailyXPData[date] = { total: 0, tasks: 0, daily: 0, habits: 0 }
+      }
+      
+      dailyXPData[date].total += activity.xp
+      
+      if (activity.type === 'plans') dailyXPData[date].tasks += activity.xp
+      else if (activity.type === 'dailies') dailyXPData[date].daily += activity.xp
+      else if (activity.type === 'habits') dailyXPData[date].habits += activity.xp
     }
   })
 
-  const dailyChartData = Object.entries(dailyXPData)
-    .map(([date, xp]) => ({ date, XP: xp }))
+  let dailyChartData = Object.entries(dailyXPData)
+    .map(([date, stats]) => ({ 
+      date, 
+      XP: stats.total,
+      Tasks: stats.tasks,
+      Daily: stats.daily,
+      Habits: stats.habits
+    }))
     .sort((a, b) => {
       const dateA = new Date(a.date + ', 2024').getTime()
       const dateB = new Date(b.date + ', 2024').getTime()
       return dateA - dateB
     })
     .slice(-14) // Last 14 days
+
+  if (dailyChartData.length > 0) {
+    dailyChartData = [{ date: '', XP: 0, Tasks: 0, Daily: 0, Habits: 0 }, ...dailyChartData]
+  }
 
   // Prepare data for skill level comparison
   const levelChartData = skillsWithData.map((skill) => ({
@@ -414,11 +449,17 @@ function StatisticsView({ uiColor }: { uiColor: string }) {
                       if (!active || !payload || !payload[0]) return null;
                       const d = payload[0].payload;
                       const xp = d.XP;
-                      const name = d.name;
+                      const tasks = d.Tasks;
+                      const daily = d.Daily;
+                      const habits = d.Habits;
+                      const date = d.date;
                       return (
                         <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'6px',padding:'8px',minWidth:'120px',color:'var(--foreground)'}}>
-                          <div><b>{name}</b></div>
-                          <div>{xp} XP</div>
+                          <div><b>{date}</b></div>
+                          <div>Daily XP {xp}</div>
+                          <div>Tasks - {tasks}</div>
+                          <div>Daily - {daily}</div>
+                          <div>Habbits - {habits}</div>
                         </div>
                       );
                     }}
@@ -478,12 +519,12 @@ function StatisticsView({ uiColor }: { uiColor: string }) {
                       // #endregion
                       if (!active || !payload || !payload[0]) return null;
                       const d = payload[0].payload;
-                      const xp = d.XP;
+                      const level = d.Level;
                       const name = d.name;
                       return (
                         <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'6px',padding:'8px',minWidth:'120px',color:'var(--foreground)'}}>
                           <div><b>{name}</b></div>
-                          <div>{xp} XP</div>
+                          <div>Level {level}</div>
                         </div>
                       );
                     }}

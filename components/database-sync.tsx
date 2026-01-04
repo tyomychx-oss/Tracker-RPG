@@ -5,8 +5,8 @@ import { createClient } from "@/utils/supabase/client"
 import { 
   useXP, 
   useQuests, 
-  useSkillXP, 
-  useSkillColors, 
+  useAreaXP, 
+  useAreaColors, 
   useRecentActivity, 
   useUIColor, 
   useNickname 
@@ -15,8 +15,8 @@ import {
 export function DatabaseSync() {
   const { totalXP, currentLevel, maxXP } = useXP()
   const { quests } = useQuests()
-  const { skillXPs } = useSkillXP()
-  const { skillColors } = useSkillColors()
+  const { areaXPs } = useAreaXP()
+  const { areaColors } = useAreaColors()
   const { activities } = useRecentActivity()
   const { uiColor } = useUIColor()
   const { nickname } = useNickname()
@@ -48,8 +48,8 @@ export function DatabaseSync() {
           current_level: currentLevel,
           max_xp: maxXP,
           quests,
-          skill_xps: skillXPs,
-          skill_colors: skillColors,
+          skill_xps: areaXPs,
+          skill_colors: areaColors,
           activities,
           ui_color: uiColor,
           updated_at: new Date().toISOString(),
@@ -66,7 +66,7 @@ export function DatabaseSync() {
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current)
     }
-  }, [totalXP, currentLevel, maxXP, quests, skillXPs, skillColors, activities, uiColor, nickname])
+  }, [totalXP, currentLevel, maxXP, quests, areaXPs, areaColors, activities, uiColor, nickname])
 
   // Маленький індикатор в кутку екрану
   return (

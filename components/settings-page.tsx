@@ -135,20 +135,20 @@ export function SettingsPage() {
           <div className="space-y-3">
             <Label className="text-foreground">Choose interface color</Label>
             <p className="text-sm text-muted-foreground">
-              This color will be applied to headings like Active Skills, Active Quests, and other UI elements
+              This color will be applied to headings like Active Areas, Active Quests, and other UI elements
             </p>
             {showColorSaved && <p className="text-sm text-green-500">Color updated successfully</p>}
-            <div className="grid grid-cols-4 gap-3 mt-4">
+            <div className="grid grid-cols-6 gap-3 mt-4">
               {INTERFACE_COLORS.map((color) => (
                 <button
                   key={color.value}
                   onClick={() => handleColorSelect(color.value)}
-                  className={`flex flex-col items-center gap-2 p-3 rounded-lg border-2 transition-all hover:scale-105 ${
-                    uiColor === color.value ? "border-foreground bg-secondary" : "border-border hover:border-foreground"
-                  }`}
+                  className="flex items-center justify-center p-2 transition-transform hover:scale-105"
                 >
-                  <div className="w-12 h-12 rounded-full" style={{ backgroundColor: color.value }} />
-                  <span className="text-xs text-foreground font-medium">{color.name}</span>
+                  <div
+                    className={`w-10 h-10 rounded-full ${uiColor === color.value ? "ring-2 ring-foreground" : ""}`}
+                    style={{ backgroundColor: color.value }}
+                  />
                 </button>
               ))}
             </div>

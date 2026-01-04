@@ -7,8 +7,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
-import { Pencil, Plus, Trash2 } from "lucide-react"
-import { useSkillColors, useSkillFilter, useUIColor, useSkillXP, useSkills } from "@/components/providers"
+import { Pencil, Plus, Trash2, Archive, ChevronDown, ChevronUp } from "lucide-react"
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
+import { useAreaColors, useAreaFilter, useUIColor, useAreaXP, useAreas } from "@/components/providers"
 
 const BASIC_COLORS = [
   "#ef4444",
@@ -26,11 +27,11 @@ const BASIC_COLORS = [
 ]
 
 export function SkillsListEditable() {
-  const { skillColors, setSkillColor } = useSkillColors()
-  const { selectedSkill, setSelectedSkill } = useSkillFilter()
+  const { areaColors, setAreaColor } = useAreaColors()
+  const { selectedAreas, toggleArea } = useAreaFilter()
   const { uiColor } = useUIColor()
-  const { skillXPs, addSkillXP } = useSkillXP()
-  const { skills: skillsList, addSkill, removeSkill } = useSkills()
+  const { areaXPs, addAreaXP } = useAreaXP()
+  const { areas: areasList, addArea, removeArea, archivedAreas, archiveArea, unarchiveArea } = useAreas()
   const [editingSkill, setEditingSkill] = useState<string | null>(null)
   const [editingSkillName, setEditingSkillName] = useState("")
   const [selectedColor, setSelectedColor] = useState<string>("")
@@ -39,9 +40,10 @@ export function SkillsListEditable() {
   const [newSkillName, setNewSkillName] = useState("")
   const [newSkillColor, setNewSkillColor] = useState("#de6550")
   const [deletingSkill, setDeletingSkill] = useState<string | null>(null)
+  const [showArchivedAreas, setShowArchivedAreas] = useState(false)
 
-  const skills = skillsList.map((name) => {
-    const xp = skillXPs[name] || 0
+  const skills = (areasList || []).map((name) => {
+    const xp = areaXPs?.[name] || 0
     const level = Math.floor(xp / 100) + 1
     return { name, level, xp }
   })
@@ -49,7 +51,7 @@ export function SkillsListEditable() {
   const handleEdit = (skillName: string) => {
     setEditingSkill(skillName)
     setEditingSkillName(skillName)
-    setSelectedColor(skillColors[skillName] || uiColor)
+    setSelectedColor(areaColors[skillName] || uiColor)
     setShowSavedMessage(false)
   }
 
@@ -59,7 +61,7 @@ export function SkillsListEditable() {
 
   const handleSave = () => {
     if (editingSkill) {
-      setSkillColor(editingSkill, selectedColor)
+      setAreaColor(editingSkill, selectedColor)
       setShowSavedMessage(true)
       setTimeout(() => {
         setShowSavedMessage(false)
@@ -74,14 +76,10 @@ export function SkillsListEditable() {
   }
 
   const handleSkillClick = (skillName: string) => {
-    if (selectedSkill === skillName) {
-      setSelectedSkill(null)
-    } else {
-      setSelectedSkill(skillName)
-    }
+    toggleArea(skillName)
   }
 
-  const handleCreateSkill = () => {
+  const handleCreateArea = () => {
     setShowCreateSkill(true)
     setNewSkillName("")
     setNewSkillColor("#de6550")
@@ -89,9 +87,9 @@ export function SkillsListEditable() {
 
   const handleSaveNewSkill = () => {
     if (newSkillName.trim()) {
-      setSkillColor(newSkillName, newSkillColor)
-      addSkill(newSkillName, newSkillColor)
-      addSkillXP(newSkillName, 0) // Initialize with 0 XP
+      setAreaColor(newSkillName, newSkillColor)
+      addArea(newSkillName, newSkillColor)
+      addAreaXP(newSkillName, 0)
       setShowCreateSkill(false)
     }
   }
@@ -103,7 +101,7 @@ export function SkillsListEditable() {
 
   const handleConfirmDelete = () => {
     if (deletingSkill) {
-      removeSkill(deletingSkill)
+      removeArea(deletingSkill)
       setDeletingSkill(null)
     }
   }
@@ -116,26 +114,25 @@ export function SkillsListEditable() {
     <>
       <Card className="bg-card border-border">
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="font-mono" style={{ color: uiColor }}>
-            ACTIVE SKILLS
+          <CardTitle style={{ color: uiColor }}>
+            ACTIVE AREAS
           </CardTitle>
-          <Button variant="ghost" size="sm" onClick={handleCreateSkill} className="h-8 w-8 p-0 hover:bg-secondary">
+          <Button variant="ghost" size="sm" onClick={handleCreateArea} className="h-8 w-8 p-0 hover:bg-secondary">
             <Plus className="h-4 w-4" />
           </Button>
         </CardHeader>
         <CardContent className="space-y-3">
           {skills.length === 0 ? (
             <div className="text-muted-foreground text-sm text-center py-4">
-              No skills yet. Click + to create your first skill!
+              No areas yet. Click + to create your first area!
             </div>
           ) : (
             skills.map((skill, index) => (
               <div
                 key={index}
                 className={`flex items-center justify-between py-2 border-b border-border last:border-0 cursor-pointer hover:bg-secondary/50 px-2 -mx-2 rounded transition-colors ${
-                  selectedSkill === skill.name ? "bg-primary/10 border-l-4 border-l-primary" : ""
+                  selectedAreas.includes(skill.name) ? "bg-primary/10 border-l-4 border-l-primary" : ""
                 }`}
-                onClick={() => handleSkillClick(skill.name)}
               >
                 <div className="flex items-center gap-4">
                   <span className="font-semibold text-foreground">{skill.name}</span>
@@ -143,37 +140,99 @@ export function SkillsListEditable() {
                   <span className="text-sm text-muted-foreground">{skill.xp} XP</span>
                 </div>
                 <div className="flex items-center gap-1">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={(e) => handleDeleteClick(skill.name, e)}
-                    className="h-8 w-8 p-0 hover:bg-secondary"
-                  >
-                    <Trash2 className="h-4 w-4 text-white" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleEdit(skill.name)
-                    }}
-                    className="h-8 w-8 p-0 hover:bg-secondary"
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </Button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleEdit(skill.name)
+                        }}
+                        className="h-8 w-8 p-0 hover:bg-secondary"
+                        aria-label="Edit"
+                      >
+                        <Pencil className="h-4 w-4 text-white" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Edit</TooltipContent>
+                  </Tooltip>
+
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          archiveArea(skill.name)
+                        }}
+                        className="h-8 w-8 p-0 hover:bg-secondary"
+                        aria-label="Archive"
+                      >
+                        <Archive className="h-4 w-4 text-white" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Archive</TooltipContent>
+                  </Tooltip>
+
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => handleDeleteClick(skill.name, e)}
+                        className="h-8 w-8 p-0 hover:bg-secondary"
+                        aria-label="Delete"
+                      >
+                        <Trash2 className="h-4 w-4 text-white" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Delete</TooltipContent>
+                  </Tooltip>
                 </div>
               </div>
             ))
           )}
         </CardContent>
+        <CardContent className="pt-0">
+          <div className="pt-4 border-t border-border">
+            <button
+              onClick={() => setShowArchivedAreas((prev) => !prev)}
+              className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 w-full justify-center transition-colors"
+            >
+              Archive {showArchivedAreas ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </button>
+            {showArchivedAreas && (
+              <div className="space-y-2 mt-3">
+                {archivedAreas.length === 0 ? (
+                  <div className="text-sm text-muted-foreground text-center py-2">No archived areas</div>
+                ) : (
+                  archivedAreas.map((name) => (
+                    <div key={name} className="flex items-center justify-between py-2 px-2 rounded hover:bg-secondary/50">
+                      <span className="text-foreground">{name}</span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-xs bg-transparent"
+                        onClick={() => unarchiveArea(name)}
+                      >
+                        Unarchive
+                      </Button>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        </CardContent>
       </Card>
 
-      {/* Edit Skill Dialog */}
+      {/* Edit Area Dialog */}
       <Dialog open={!!editingSkill} onOpenChange={(open) => !open && handleClose()}>
         <DialogContent className="bg-card border-border">
           <DialogHeader>
-            <DialogTitle className="text-primary font-mono">EDIT SKILL</DialogTitle>
+            <DialogTitle className="text-primary">EDIT AREA</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
@@ -182,12 +241,12 @@ export function SkillsListEditable() {
                 value={editingSkillName}
                 onChange={(e) => setEditingSkillName(e.target.value)}
                 className="bg-secondary border-border text-foreground"
-                placeholder="Skill name"
+                placeholder="Area name"
               />
             </div>
 
             <div className="space-y-3">
-              <Label className="text-sm text-foreground">Choose skill color</Label>
+              <Label className="text-sm text-foreground">Choose area color</Label>
               <div className="grid grid-cols-6 gap-2">
                 {BASIC_COLORS.map((color) => (
                   <button
@@ -211,28 +270,28 @@ export function SkillsListEditable() {
         </DialogContent>
       </Dialog>
 
-      {/* Create Skill Dialog */}
+      {/* Create Area Dialog */}
       <Dialog open={showCreateSkill} onOpenChange={setShowCreateSkill}>
         <DialogContent className="bg-card border-border">
           <DialogHeader>
-            <DialogTitle className="text-primary font-mono">CREATE NEW SKILL</DialogTitle>
+            <DialogTitle className="text-primary">CREATE NEW AREA</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="new-skill-name" className="text-foreground">
-                Skill Name
+                Area Name
               </Label>
               <Input
                 id="new-skill-name"
                 value={newSkillName}
                 onChange={(e) => setNewSkillName(e.target.value)}
                 className="bg-secondary border-border text-foreground"
-                placeholder="e.g., Coding, Design, Sport..."
+                placeholder="e.g., Work, Sport, Study..."
               />
             </div>
 
             <div className="space-y-3">
-              <Label className="text-sm text-foreground">Choose skill color</Label>
+              <Label className="text-sm text-foreground">Choose area color</Label>
               <div className="grid grid-cols-6 gap-2">
                 {BASIC_COLORS.map((color) => (
                   <button
@@ -253,20 +312,20 @@ export function SkillsListEditable() {
               disabled={!newSkillName.trim()}
               className="bg-green-600 hover:bg-green-700 text-white"
             >
-              Create Skill
+              Create Area
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Delete Skill Confirmation Dialog */}
+      {/* Delete Area Confirmation Dialog */}
       <Dialog open={!!deletingSkill} onOpenChange={(open) => !open && handleCancelDelete()}>
         <DialogContent className="bg-card border-border">
           <DialogHeader>
-            <DialogTitle className="text-primary font-mono">DELETE SKILL</DialogTitle>
+            <DialogTitle className="text-primary">DELETE AREA</DialogTitle>
           </DialogHeader>
           <div className="py-4">
-            <p className="text-foreground">Do you really want to delete this skill?</p>
+            <p className="text-foreground">Do you really want to delete this area?</p>
             <p className="text-sm text-muted-foreground mt-2">
               All tasks associated with "{deletingSkill}" will also be removed.
             </p>

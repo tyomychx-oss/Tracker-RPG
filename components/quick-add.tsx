@@ -7,36 +7,53 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Plus, Award } from "lucide-react"
-import { useRecentActivity, useUIColor, useQuests, useSkills } from "@/components/providers"
+import { useRecentActivity, useUIColor, useQuests, useAreas } from "@/components/providers"
 
 export function QuickAdd() {
   const [taskName, setTaskName] = useState("")
   const [taskType, setTaskType] = useState("plans")
   const [taskSkill, setTaskSkill] = useState("")
-  const [taskXP, setTaskXP] = useState("50")
-  const [taskPriority, setTaskPriority] = useState("daily")
+  const [taskXP, setTaskXP] = useState("25")
+  const [taskPriority, setTaskPriority] = useState("short")
+  const [dailyCount, setDailyCount] = useState("1")
+  const [dailyPeriodDays, setDailyPeriodDays] = useState("1")
+  const [dailyResetTime, setDailyResetTime] = useState("00:00")
   const { activities } = useRecentActivity()
   const { uiColor } = useUIColor()
   const { addQuest } = useQuests()
-  const { skills: availableSkills } = useSkills()
+  const { areas: availableAreas } = useAreas()
 
   const handleAddTask = () => {
     if (!taskName.trim() || !taskSkill) return
 
-    addQuest(taskType as "plans" | "dailies" | "habits", {
+    const base = {
       id: Date.now(),
       title: taskName,
       skill: taskSkill,
-      xp: Number(taskXP),
-      rating: taskPriority,
+      xp: Number(taskXP || "25"),
+      rating: taskPriority || "short",
       completed: false,
       archivedAt: null,
       lastCompletedDate: null,
-    })
+    } as any
+
+    if (taskType === "dailies") {
+      base.frequencyCount = Number(dailyCount || "1")
+      base.frequencyPeriodDays = Number(dailyPeriodDays || "1")
+      base.resetTime = dailyResetTime || "00:00"
+      base.completedCount = 0
+      base.lastResetDate = new Date().toDateString()
+      base.periodStartAt = Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate())
+    }
+    if (taskType === "habits") {
+      base.streak = 0
+    }
+
+    addQuest(taskType as "plans" | "dailies" | "habits", base)
 
     // Reset form
     setTaskName("")
-    setTaskXP("50")
+    setTaskXP("25")
   }
 
   const formatTimestamp = (timestamp: number) => {
@@ -54,7 +71,7 @@ export function QuickAdd() {
     <div className="space-y-6">
       <Card className="bg-card border-border">
         <CardHeader>
-          <CardTitle className="font-mono flex items-center gap-2" style={{ color: uiColor }}>
+          <CardTitle className="flex items-center gap-2" style={{ color: uiColor }}>
             <Plus className="h-5 w-5" />
             QUICK ADD
           </CardTitle>
@@ -92,19 +109,19 @@ export function QuickAdd() {
 
             <div className="space-y-2">
               <Label htmlFor="task-skill" className="text-foreground">
-                Skill
+                Area
               </Label>
               <Select value={taskSkill} onValueChange={setTaskSkill}>
                 <SelectTrigger id="task-skill" className="bg-input">
-                  <SelectValue placeholder="Select skill" />
+                  <SelectValue placeholder="Select area" />
                 </SelectTrigger>
                 <SelectContent>
-                  {availableSkills.length === 0 ? (
+                  {(availableAreas || []).length === 0 ? (
                     <div className="px-2 py-1 text-sm text-muted-foreground">
-                      Create a skill first in the Skills tab
+                      Create an area first in the Areas tab
                     </div>
                   ) : (
-                    availableSkills.map((skill) => (
+                    availableAreas.map((skill) => (
                       <SelectItem key={skill} value={skill}>
                         {skill}
                       </SelectItem>
@@ -122,7 +139,7 @@ export function QuickAdd() {
             <Input
               id="task-xp"
               type="number"
-              placeholder="50"
+              placeholder="25"
               value={taskXP}
               onChange={(e) => setTaskXP(e.target.value)}
               className="bg-input font-mono"
@@ -138,14 +155,72 @@ export function QuickAdd() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="daily">Daily</SelectItem>
-                <SelectItem value="medium">Medium</SelectItem>
-                <SelectItem value="long">Long</SelectItem>
-                <SelectItem value="weekly">Weekly</SelectItem>
-                <SelectItem value="monthly">Monthly</SelectItem>
+                <SelectItem value="fast">Fast</SelectItem>
+                <SelectItem value="short">Short</SelectItem>
+                <SelectItem value="deep">Deep</SelectItem>
+                <SelectItem value="hard">Hard</SelectItem>
               </SelectContent>
             </Select>
           </div>
+
+          {taskType === "dailies" && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="task-count" className="text-foreground">
+                  Times
+                </Label>
+                <Select value={dailyCount} onValueChange={setDailyCount}>
+                  <SelectTrigger id="task-count" className="bg-input">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[...Array(10)].map((_, i) => (
+                      <SelectItem key={i + 1} value={String(i + 1)}>
+                        {i + 1}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="task-period" className="text-foreground">
+                  Per days
+                </Label>
+                <Select value={dailyPeriodDays} onValueChange={setDailyPeriodDays}>
+                  <SelectTrigger id="task-period" className="bg-input">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[...Array(14)].map((_, i) => (
+                      <SelectItem key={i + 1} value={String(i + 1)}>
+                        {i + 1}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="task-reset" className="text-foreground">
+                  Reset Time (UTC)
+                </Label>
+                <Select value={dailyResetTime} onValueChange={setDailyResetTime}>
+                  <SelectTrigger id="task-reset" className="bg-input">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[...Array(24)].map((_, h) => {
+                      const label = `${String(h).padStart(2, "0")}:00`
+                      return (
+                        <SelectItem key={label} value={label}>
+                          {label}
+                        </SelectItem>
+                      )
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
 
           <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground" onClick={handleAddTask}>
             <Plus className="mr-2 h-4 w-4" />
@@ -156,7 +231,7 @@ export function QuickAdd() {
 
       <Card className="bg-card border-border">
         <CardHeader>
-          <CardTitle className="text-sm font-mono text-muted-foreground flex items-center gap-2">
+          <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
             <Award className="h-4 w-4" />
             RECENT ACTIVITY
           </CardTitle>

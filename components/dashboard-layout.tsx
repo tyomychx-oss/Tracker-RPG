@@ -10,12 +10,12 @@ import { LayoutDashboard, Zap, BarChart3, Settings, LogOut } from "lucide-react"
 import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useNickname, useUIColor, useXP, useSkills, useSkillXP, useSkillColors, useRecentActivity, useQuests } from "@/components/providers"
-import { PieChart, Pie, Cell, ResponsiveContainer, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, LineChart, Line } from "recharts"
+import { PieChart, Pie, Cell, ResponsiveContainer, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, LineChart, Line, ReferenceArea } from "recharts"
 import { DatabaseSync } from "@/components/database-sync"
 
 const navigation = [
   { name: "Main", icon: LayoutDashboard },
-  { name: "Skills", icon: Zap },
+  { name: "Areas", icon: Zap },
   { name: "Statistics", icon: BarChart3 },
   { name: "Settings", icon: Settings },
 ]
@@ -107,7 +107,6 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               </Avatar>
               <div>
                 <h2 className="text-lg font-semibold">{nickname}</h2>
-                <p className="text-sm text-muted-foreground">Level {currentLevel} Tracker</p>
               </div>
             </div>
 
@@ -132,7 +131,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         <main className="flex-1 p-8">
           {activeNav === "Main" && children}
           {activeNav === "Statistics" && <StatisticsContent uiColor={uiColor} />}
-          {activeNav === "Skills" && <SkillsListEditable />}
+          {activeNav === "Areas" && <SkillsListEditable />}
           {activeNav === "Settings" && <SettingsPage />}
         </main>
       </div>
@@ -145,6 +144,8 @@ function StatisticsContent({ uiColor }: { uiColor: string }) {
 }
 
 function StatisticsView({ uiColor }: { uiColor: string }) {
+  const [hoveredXPIndex, setHoveredXPIndex] = useState<number | null>(null)
+  const [hoveredLevelIndex, setHoveredLevelIndex] = useState<number | null>(null)
   const { skills, hasSkills } = useSkills()
   const { skillXPs } = useSkillXP()
   const { skillColors } = useSkillColors()
@@ -158,7 +159,7 @@ function StatisticsView({ uiColor }: { uiColor: string }) {
         <h2 className="text-2xl font-bold mb-6 text-foreground">Statistics</h2>
         <Card className="bg-card border-border">
           <CardContent className="py-12 text-center">
-            <p className="text-muted-foreground">No skills yet. Add skills in the Skills tab!</p>
+            <p className="text-muted-foreground">No areas yet. Add areas in the Areas tab!</p>
           </CardContent>
         </Card>
       </div>
@@ -196,7 +197,10 @@ function StatisticsView({ uiColor }: { uiColor: string }) {
   const dailyXPData: Record<string, number> = {}
   activities.forEach((activity) => {
     if (activity.xp && activity.xp > 0) {
-      const date = new Date(activity.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      const d = new Date(activity.timestamp)
+      const monthShort = d.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' })
+      const day = d.getUTCDate()
+      const date = `${monthShort} ${day}`
       dailyXPData[date] = (dailyXPData[date] || 0) + activity.xp
     }
   })
@@ -208,7 +212,7 @@ function StatisticsView({ uiColor }: { uiColor: string }) {
       const dateB = new Date(b.date + ', 2024').getTime()
       return dateA - dateB
     })
-    .slice(-14) // Last 14 days
+    .slice(-7)
 
   // Prepare data for skill level comparison
   const levelChartData = skillsWithData.map((skill) => ({
@@ -233,11 +237,11 @@ function StatisticsView({ uiColor }: { uiColor: string }) {
       <h2 className="text-2xl font-bold mb-6 text-foreground">Statistics</h2>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Pie Chart - Skill Distribution */}
+        {/* Pie Chart - Area Distribution */}
         <Card className="bg-card border-border">
           <CardHeader>
-            <CardTitle className="font-mono" style={{ color: uiColor }}>
-              SKILL DISTRIBUTION (%)
+            <CardTitle style={{ color: uiColor }}>
+              AREA DISTRIBUTION (%)
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -308,11 +312,11 @@ function StatisticsView({ uiColor }: { uiColor: string }) {
           </CardContent>
         </Card>
 
-        {/* Bar Chart - Skill XP Comparison */}
+        {/* Bar Chart - Area XP Comparison */}
         <Card className="bg-card border-border">
           <CardHeader>
-            <CardTitle className="font-mono" style={{ color: uiColor }}>
-              SKILL XP COMPARISON
+            <CardTitle style={{ color: uiColor }}>
+              AREA XP COMPARISON
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -322,8 +326,20 @@ function StatisticsView({ uiColor }: { uiColor: string }) {
               </div>
             ) : (
               <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={barChartData}>
+                <BarChart
+                  data={barChartData}
+                  onMouseMove={(state: any) => setHoveredXPIndex(state?.activeTooltipIndex ?? null)}
+                  onMouseLeave={() => setHoveredXPIndex(null)}
+                >
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                  {hoveredXPIndex !== null && (
+                    <ReferenceArea
+                      x1={barChartData[hoveredXPIndex]?.name}
+                      x2={barChartData[hoveredXPIndex]?.name}
+                      fill="rgba(60,60,65,0.35)"
+                      strokeOpacity={0}
+                    />
+                  )}
                   <XAxis
                     dataKey="name"
                     tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }}
@@ -333,14 +349,8 @@ function StatisticsView({ uiColor }: { uiColor: string }) {
                   />
                   <YAxis tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }} />
                   <Tooltip
+                    cursor={{ fill: '#27272a' }}
                     content={({ active, payload }) => {
-                      // #region agent log
-                      fetch('http://127.0.0.1:7242/ingest/252e63c3-cf19-4629-b606-81d571c6b361',{
-                        method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-                          sessionId:'debug-session',runId:'run2',hypothesisId:'B',location:'dashboard-layout.tsx:334',message:'Skill XP Comparison Tooltip',data:{active,payload},timestamp:Date.now()
-                        })
-                      }).catch(()=>{});
-                      // #endregion
                       if (!active || !payload || !payload[0]) return null;
                       const d = payload[0].payload;
                       const xp = d.XP;
@@ -348,10 +358,10 @@ function StatisticsView({ uiColor }: { uiColor: string }) {
                       return (
                         <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'6px',padding:'8px',minWidth:'120px',color:'var(--foreground)'}}>
                           <div><b>{name}</b></div>
-                          <div>{xp} XP</div>
+                          <div>XP - {xp}</div>
                         </div>
                       );
-                    }}
+                  }}
                     contentStyle={{
                       backgroundColor: 'var(--card)',
                       border: '1px solid var(--border)',
@@ -372,8 +382,8 @@ function StatisticsView({ uiColor }: { uiColor: string }) {
         {/* Daily XP Progress */}
         <Card className="bg-card border-border">
           <CardHeader>
-            <CardTitle className="font-mono" style={{ color: uiColor }}>
-              DAILY XP PROGRESS (Last 14 Days)
+            <CardTitle style={{ color: uiColor }}>
+              DAILY XP PROGRESS
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -383,7 +393,13 @@ function StatisticsView({ uiColor }: { uiColor: string }) {
               </div>
             ) : (
               <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={dailyChartData}>
+                <LineChart
+                  data={
+                    dailyChartData.length
+                      ? [{ date: dailyChartData[0].date, XP: 0 }, ...dailyChartData]
+                      : dailyChartData
+                  }
+                >
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                   <XAxis
                     dataKey="date"
@@ -402,11 +418,11 @@ function StatisticsView({ uiColor }: { uiColor: string }) {
                       if (!active || !payload || !payload[0]) return null;
                       const d = payload[0].payload;
                       const xp = d.XP;
-                      const name = d.name;
+                      const date = d.date;
                       return (
-                        <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'6px',padding:'8px',minWidth:'120px',color:'var(--foreground)'}}>
-                          <div><b>{name}</b></div>
-                          <div>{xp} XP</div>
+                        <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'6px',padding:'8px',minWidth:'140px',color:'var(--foreground)'}}>
+                          <div><b>{date}</b></div>
+                          <div>Daily XP +{xp}</div>
                         </div>
                       );
                     }}
@@ -430,11 +446,11 @@ function StatisticsView({ uiColor }: { uiColor: string }) {
           </CardContent>
         </Card>
 
-        {/* Skill Levels Comparison */}
+        {/* Area Levels Comparison */}
         <Card className="bg-card border-border">
           <CardHeader>
-            <CardTitle className="font-mono" style={{ color: uiColor }}>
-              SKILL LEVELS COMPARISON
+            <CardTitle style={{ color: uiColor }}>
+              AREA LEVELS COMPARISON
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -444,8 +460,20 @@ function StatisticsView({ uiColor }: { uiColor: string }) {
               </div>
             ) : (
               <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={levelChartData}>
+                <BarChart
+                  data={levelChartData}
+                  onMouseMove={(state: any) => setHoveredLevelIndex(state?.activeTooltipIndex ?? null)}
+                  onMouseLeave={() => setHoveredLevelIndex(null)}
+                >
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                  {hoveredLevelIndex !== null && (
+                    <ReferenceArea
+                      x1={levelChartData[hoveredLevelIndex]?.name}
+                      x2={levelChartData[hoveredLevelIndex]?.name}
+                      fill="rgba(60,60,65,0.35)"
+                      strokeOpacity={0}
+                    />
+                  )}
                   <XAxis
                     dataKey="name"
                     tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }}
@@ -456,21 +484,14 @@ function StatisticsView({ uiColor }: { uiColor: string }) {
                   <YAxis tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }} />
                   <Tooltip
                     content={({ active, payload }) => {
-                      // #region agent log
-                      fetch('http://127.0.0.1:7242/ingest/252e63c3-cf19-4629-b606-81d571c6b361',{
-                        method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-                          sessionId:'debug-session',runId:'run2',hypothesisId:'B',location:'dashboard-layout.tsx:334',message:'Skill XP Comparison Tooltip',data:{active,payload},timestamp:Date.now()
-                        })
-                      }).catch(()=>{});
-                      // #endregion
                       if (!active || !payload || !payload[0]) return null;
                       const d = payload[0].payload;
-                      const xp = d.XP;
                       const name = d.name;
+                      const level = d.Level;
                       return (
                         <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'6px',padding:'8px',minWidth:'120px',color:'var(--foreground)'}}>
                           <div><b>{name}</b></div>
-                          <div>{xp} XP</div>
+                          <div>Level - {level}</div>
                         </div>
                       );
                     }}
@@ -496,7 +517,7 @@ function StatisticsView({ uiColor }: { uiColor: string }) {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card className="bg-card border-border">
           <CardHeader>
-            <CardTitle className="font-mono text-sm" style={{ color: uiColor }}>
+            <CardTitle className="text-sm" style={{ color: uiColor }}>
               TOTAL XP
             </CardTitle>
           </CardHeader>
@@ -508,7 +529,7 @@ function StatisticsView({ uiColor }: { uiColor: string }) {
 
         <Card className="bg-card border-border">
           <CardHeader>
-            <CardTitle className="font-mono text-sm" style={{ color: uiColor }}>
+            <CardTitle className="text-sm" style={{ color: uiColor }}>
               QUEST COMPLETION
             </CardTitle>
           </CardHeader>
@@ -522,22 +543,22 @@ function StatisticsView({ uiColor }: { uiColor: string }) {
 
         <Card className="bg-card border-border">
           <CardHeader>
-            <CardTitle className="font-mono text-sm" style={{ color: uiColor }}>
-              ACTIVE SKILLS
+            <CardTitle className="text-sm" style={{ color: uiColor }}>
+              ACTIVE AREAS
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-foreground">{skills.length}</div>
-            <p className="text-sm text-muted-foreground mt-2">Skills tracked</p>
+            <p className="text-sm text-muted-foreground mt-2">Areas tracked</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Top Skills by XP */}
+      {/* Top Areas by XP */}
       <Card className="bg-card border-border">
         <CardHeader>
-          <CardTitle className="font-mono" style={{ color: uiColor }}>
-            TOP SKILLS BY XP
+          <CardTitle style={{ color: uiColor }}>
+            TOP AREAS BY XP
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -550,22 +571,17 @@ function StatisticsView({ uiColor }: { uiColor: string }) {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <span className="text-sm font-mono text-muted-foreground w-6">#{index + 1}</span>
-                      <span
-                        className="font-semibold text-foreground"
-                        style={{ color: skill.color }}
-                      >
-                        {skill.name}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        (Level {getSkillLevel(skill.xp)})
-                      </span>
+                      <span className="font-semibold text-foreground">{skill.name}</span>
                     </div>
-                    <span className="text-sm font-mono text-foreground">{skill.xp.toLocaleString()} XP</span>
+                    <div className="flex items-center gap-5">
+                      <span className="text-sm font-mono text-foreground">Level {getSkillLevel(skill.xp)}</span>
+                      <span className="text-sm font-mono text-foreground">{skill.xp.toLocaleString()} XP</span>
+                    </div>
                   </div>
                   <Progress
                     value={(skill.xp / (xpBySkill[0]?.xp || 1)) * 100}
                     className="h-2 bg-secondary"
-                    style={{ "--skill-color": skill.color } as any}
+                    style={{ "--progress-color": skill.color } as any}
                   />
                 </div>
               ))}

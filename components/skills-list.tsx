@@ -8,7 +8,7 @@ import { Progress } from "@/components/ui/progress"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { useSkillColors, useUIColor, useSkillXP, useSkills } from "@/components/providers"
+import { useAreaColors, useUIColor, useAreaXP, useAreas, useAreaFilter } from "@/components/providers"
 
 const BASIC_COLORS = [
   "#ef4444",
@@ -26,15 +26,16 @@ const BASIC_COLORS = [
 ]
 
 export function SkillsList() {
-  const { skillColors } = useSkillColors()
+  const { areaColors } = useAreaColors()
   const { uiColor } = useUIColor()
-  const { skillXPs } = useSkillXP()
-  const { skills: skillsList } = useSkills()
+  const { areaXPs } = useAreaXP()
+  const { areas: areasList } = useAreas()
+  const { selectedAreas, toggleArea } = useAreaFilter()
   const [editingSkill, setEditingSkill] = useState<string | null>(null)
   const [editingSkillName, setEditingSkillName] = useState("")
 
-  const skills = skillsList.map((name) => {
-    const xp = skillXPs[name] || 0
+  const skills = (areasList || []).map((name) => {
+    const xp = areaXPs?.[name] || 0
     const level = Math.floor(xp / 100) + 1
     const nextLevelXP = level * 100
     const progress = xp % 100
@@ -61,19 +62,25 @@ export function SkillsList() {
     <>
       <Card className="bg-card border-border">
         <CardHeader>
-          <CardTitle className="font-mono" style={{ color: uiColor }}>
-            ACTIVE SKILLS
+          <CardTitle style={{ color: uiColor }}>
+            ACTIVE AREAS
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {skills.length === 0 ? (
+          {(skills || []).length === 0 ? (
             <div className="text-muted-foreground text-sm text-center py-4">
-              No skills yet. Go to Skills tab to create your first skill!
+              No areas yet. Go to Areas tab to create your first area!
             </div>
           ) : (
             skills.map((skill, index) => {
               return (
-                <div key={index} className="space-y-2">
+                <div
+                  key={index}
+                  className={`space-y-2 cursor-pointer ${
+                    selectedAreas.includes(skill.name) ? "bg-secondary/50 border border-primary/50 rounded p-2" : ""
+                  }`}
+                  onClick={() => toggleArea(skill.name)}
+                >
                   <div className="flex items-center justify-between">
                     <span className="font-semibold text-foreground">{skill.name}</span>
                     <div className="flex items-center gap-2">
@@ -86,7 +93,7 @@ export function SkillsList() {
                     className="h-2 bg-secondary"
                     style={
                       {
-                        "--progress-color": skillColors[skill.name] || "#de6550",
+                        "--progress-color": areaColors[skill.name] || "#de6550",
                       } as React.CSSProperties
                     }
                   />
@@ -99,38 +106,38 @@ export function SkillsList() {
 
       <Dialog open={!!editingSkill} onOpenChange={(open) => !open && handleClose()}>
         <DialogContent className="bg-card border-border">
-          <DialogHeader>
-            <DialogTitle className="text-primary font-mono">EDIT SKILL</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="skill-name" className="text-sm text-foreground">
-                Skill Name
-              </Label>
-              <Input
-                id="skill-name"
-                value={editingSkillName}
-                onChange={(e) => setEditingSkillName(e.target.value)}
-                className="bg-secondary border-border text-foreground"
-              />
-            </div>
+        <DialogHeader>
+          <DialogTitle className="text-primary">EDIT AREA</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-4">
+          <div className="space-y-2">
+            <Label htmlFor="skill-name" className="text-sm text-foreground">
+              Area Name
+            </Label>
+            <Input
+              id="skill-name"
+              value={editingSkillName}
+              onChange={(e) => setEditingSkillName(e.target.value)}
+              className="bg-secondary border-border text-foreground"
+            />
+          </div>
 
-            <div className="space-y-2">
-              <Label className="text-sm text-foreground">Choose skill color</Label>
-              <div className="grid grid-cols-12 gap-1">
-                {BASIC_COLORS.map((color) => (
-                  <button
-                    key={color}
-                    onClick={() => handleColorSelect(color)}
-                    className="aspect-square rounded border border-border hover:border-foreground transition-colors"
-                    style={{ backgroundColor: color }}
-                    title={color}
-                  />
-                ))}
-              </div>
+          <div className="space-y-2">
+            <Label className="text-sm text-foreground">Choose area color</Label>
+            <div className="grid grid-cols-12 gap-1">
+              {BASIC_COLORS.map((color) => (
+                <button
+                  key={color}
+                  onClick={() => handleColorSelect(color)}
+                  className="aspect-square rounded border border-border hover:border-foreground transition-colors"
+                  style={{ backgroundColor: color }}
+                  title={color}
+                />
+              ))}
             </div>
           </div>
-        </DialogContent>
+        </div>
+      </DialogContent>
       </Dialog>
     </>
   )

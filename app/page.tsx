@@ -14,10 +14,10 @@ import { Button } from "@/components/ui/button"
 import { 
   XPProvider, 
   QuestsProvider, 
-  SkillXPProvider, 
-  SkillColorsProvider, 
-  SkillsProvider, 
-  SkillFilterProvider, 
+  AreaXPProvider, 
+  AreaColorsProvider, 
+  AreasProvider, 
+  AreaFilterProvider, 
   RecentActivityProvider, 
   UIColorProvider, 
   NicknameProvider,
@@ -177,10 +177,10 @@ export default function Page() {
   return (
     <XPProvider>
       <QuestsProvider>
-        <SkillXPProvider>
-          <SkillColorsProvider>
-            <SkillsProvider>
-              <SkillFilterProvider>
+        <AreaXPProvider>
+          <AreaColorsProvider>
+            <AreasProvider>
+              <AreaFilterProvider>
                 <RecentActivityProvider>
                   <UIColorProvider>
                     <NicknameProvider>
@@ -196,14 +196,14 @@ export default function Page() {
                         />
                       ) : (
                         <DashboardLayout>
-                          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6" onClick={handleBackgroundClick}>
-                            <div className="xl:col-span-1">
+                          <div className="grid grid-cols-12 gap-6" onClick={handleBackgroundClick}>
+                            <div className="col-span-5 space-y-6">
                               <SkillsList />
                             </div>
-                            <div className="xl:col-span-1">
+                            <div className="col-span-4">
                               <ActiveQuests />
                             </div>
-                            <div className="xl:col-span-1">
+                            <div className="col-span-3 space-y-6">
                               <QuickAdd />
                             </div>
                           </div>
@@ -212,10 +212,10 @@ export default function Page() {
                     </NicknameProvider>
                   </UIColorProvider>
                 </RecentActivityProvider>
-              </SkillFilterProvider>
-            </SkillsProvider>
-          </SkillColorsProvider>
-        </SkillXPProvider>
+              </AreaFilterProvider>
+            </AreasProvider>
+          </AreaColorsProvider>
+        </AreaXPProvider>
       </QuestsProvider>
     </XPProvider>
   )
@@ -250,7 +250,7 @@ function OnboardingDialog({
           </DialogHeader>
           <div className="space-y-6 py-6">
             <p className="text-center text-muted-foreground">
-              Start your journey to level up your skills and track your progress like an RPG character.
+              Start your journey to level up your areas and track your progress like an RPG character.
             </p>
             <div className="space-y-3">
               <Label htmlFor="onboarding-nickname" className="text-foreground">

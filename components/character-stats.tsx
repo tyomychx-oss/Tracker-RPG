@@ -4,7 +4,7 @@ import type React from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend } from "recharts"
-import { useSkillColors, useSkillXP, useSkills } from "@/app/page"
+import { useSkillColors, useSkillXP, useSkills } from "@/components/providers"
 
 export function CharacterStats() {
   const { skillColors } = useSkillColors()
@@ -41,7 +41,7 @@ export function CharacterStats() {
         <CardContent>
           {skillsList.length === 0 ? (
             <div className="h-[250px] flex items-center justify-center text-muted-foreground text-sm">
-              No skills yet. Add skills in the Skills tab to get started!
+              No areas yet. Add areas in the Areas tab to get started!
             </div>
           ) : personalityData.length === 0 ? (
             <div className="h-[250px] flex items-center justify-center text-muted-foreground text-sm">
@@ -80,18 +80,18 @@ export function CharacterStats() {
       </Card>
 
       <Card className="bg-card border-border">
-        <CardHeader>
-          <CardTitle className="text-accent font-mono">ACTIVE SKILLS</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {skillsList.length === 0 ? (
-            <div className="text-muted-foreground text-sm text-center py-4">
-              No skills yet. Add skills in the Skills tab!
-            </div>
-          ) : (
-            skills.map((skill, index) => (
-              <div key={index} className="space-y-2">
-                <div className="flex items-center justify-between">
+          <CardHeader>
+          <CardTitle className="text-accent font-mono">ACTIVE AREAS</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {skillsList.length === 0 ? (
+              <div className="text-muted-foreground text-sm text-center py-4">
+              No areas yet. Add areas in the Areas tab!
+              </div>
+            ) : (
+              skills.map((skill, index) => (
+                <div key={index} className="space-y-2">
+                  <div className="flex items-center justify-between">
                   <span className="font-semibold text-foreground">{skill.name}</span>
                   <span className="text-xs text-muted-foreground font-mono">{skill.progress}%</span>
                 </div>

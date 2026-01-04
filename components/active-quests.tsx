@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Pencil, ChevronDown, ChevronUp, Trash2 } from "lucide-react"
-import { useXP, useSkillColors, useSkillFilter, useRecentActivity, useUIColor, useSkillXP, useQuests } from "@/components/providers"
+import { useXP, useAreaColors, useAreaFilter, useRecentActivity, useUIColor, useAreaXP, useQuests } from "@/components/providers"
 
 interface TaskStateSnapshot {
   questId: number
@@ -26,10 +26,9 @@ interface TaskStateSnapshot {
 export function ActiveQuests() {
   const { quests, updateQuest, deleteQuest } = useQuests()
   const { addXP, removeXP, currentLevel, totalXP, maxXP, restorePreviousState } = useXP()
-  const { addSkillXP, removeSkillXP, skillXPs } = useSkillXP()
-  const { skillColors } = useSkillColors()
-  const [selectedFilterSkill, setSelectedFilterSkill] = useState<string>("All")
-  const { selectedSkill, setSelectedSkill } = useSkillFilter()
+  const { addAreaXP, removeAreaXP, areaXPs } = useAreaXP()
+  const { areaColors } = useAreaColors()
+  const { selectedAreas } = useAreaFilter()
   const { addActivity } = useRecentActivity()
   const { uiColor } = useUIColor()
   const [showArchived, setShowArchived] = useState({
@@ -44,6 +43,11 @@ export function ActiveQuests() {
     skill: string
     xp: number
     rating: string
+    frequency?: number
+    frequencyCount?: number
+    frequencyPeriodDays?: number
+    resetTime?: string
+    streak?: number
   } | null>(null)
 
   const [taskSnapshots, setTaskSnapshots] = useState<Record<number, TaskStateSnapshot>>({})
@@ -76,14 +80,37 @@ export function ActiveQuests() {
   useEffect(() => {
     const checkDailyReset = () => {
       const now = new Date()
-      const today = now.toDateString()
+      const utcHour = now.getUTCHours().toString().padStart(2, "0")
+      const utcMinute = now.getUTCMinutes().toString().padStart(2, "0")
+      const currentUTC = `${utcHour}:${utcMinute}`
+      const todayString = now.toDateString()
+      const todayStartUTC = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
       ;(["dailies", "habits"] as const).forEach((category) => {
         quests[category].forEach((quest: any) => {
-          if (quest.completed && quest.lastCompletedDate !== today) {
-            updateQuest(category, quest.id, {
-              completed: false,
-              lastCompletedDate: null,
-            })
+          const resetAt = quest.resetTime || "00:00"
+          if (quest.lastResetDate !== todayString && currentUTC >= resetAt) {
+            if (category === "dailies") {
+              const periodDays = quest.frequencyPeriodDays || 1
+              const periodStart = typeof quest.periodStartAt === "number" ? quest.periodStartAt : todayStartUTC
+              const daysElapsed = Math.floor((todayStartUTC - periodStart) / 86400000)
+              const shouldResetCount = daysElapsed >= periodDays
+              const updates: any = {
+                completed: false,
+                lastCompletedDate: null,
+                lastResetDate: todayString,
+              }
+              if (shouldResetCount) {
+                updates.completedCount = 0
+                updates.periodStartAt = todayStartUTC
+              }
+              updateQuest(category, quest.id, updates)
+            } else {
+              updateQuest(category, quest.id, {
+                completed: false,
+                lastCompletedDate: null,
+                lastResetDate: todayString,
+              } as any)
+            }
           }
         })
       })
@@ -104,6 +131,7 @@ export function ActiveQuests() {
     skillName: string,
   ) => {
     const today = new Date().toDateString()
+    const questObj = quests[category].find((q: any) => q.id === questId) as any
 
     if (isCompleted) {
       const snapshot = taskSnapshots[questId]
@@ -111,10 +139,10 @@ export function ActiveQuests() {
         // Use snapshot to restore exact previous state
         restorePreviousState(snapshot.previousLevel, snapshot.previousXP, snapshot.previousMaxXP)
         // Restore skill XP to previous amount
-        const currentSkillXP = skillXPs[skillName] || 0
+        const currentSkillXP = areaXPs[skillName] || 0
         const xpToRemove = currentSkillXP - snapshot.previousSkillXP
         if (xpToRemove > 0) {
-          removeSkillXP(skillName, xpToRemove)
+          removeAreaXP(skillName, xpToRemove)
         }
         // Remove snapshot
         setTaskSnapshots((prev) => {
@@ -125,7 +153,7 @@ export function ActiveQuests() {
       } else {
         // Fallback: if snapshot is lost, use removeXP (which now handles level decreases properly)
         removeXP(xpAmount)
-        removeSkillXP(skillName, xpAmount)
+        removeAreaXP(skillName, xpAmount)
       }
       addActivity(`Uncompleted: ${questTitle}`, -xpAmount)
       updateQuest(category, questId, { completed: false, lastCompletedDate: null })
@@ -135,15 +163,32 @@ export function ActiveQuests() {
         previousLevel: currentLevel,
         previousXP: totalXP,
         previousMaxXP: maxXP,
-        previousSkillXP: skillXPs[skillName] || 0,
+        previousSkillXP: areaXPs[skillName] || 0,
       }
       setTaskSnapshots((prev) => ({ ...prev, [questId]: snapshot }))
 
       // Add XP
       addXP(xpAmount)
-      addSkillXP(skillName, xpAmount)
+      addAreaXP(skillName, xpAmount)
       addActivity(`Completed: ${questTitle}`, xpAmount)
-      updateQuest(category, questId, { completed: true, lastCompletedDate: today })
+      if (category === "habits") {
+        const currentStreak = (questObj?.streak || 0) + 1
+        updateQuest(category, questId, {
+          completed: true,
+          lastCompletedDate: today,
+          streak: currentStreak,
+        })
+      } else if (category === "dailies") {
+        const freq = questObj?.frequencyCount ?? questObj?.frequency ?? 1
+        const count = (questObj?.completedCount || 0) + 1
+        updateQuest(category, questId, {
+          completed: count >= freq,
+          lastCompletedDate: today,
+          completedCount: count,
+        } as any)
+      } else {
+        updateQuest(category, questId, { completed: true, lastCompletedDate: today })
+      }
     }
   }
 
@@ -159,7 +204,7 @@ export function ActiveQuests() {
     skillName: string,
   ) => {
     removeXP(xpAmount)
-    removeSkillXP(skillName, xpAmount)
+    removeAreaXP(skillName, xpAmount)
     updateQuest(category, questId, { completed: false, archivedAt: null })
   }
 
@@ -171,6 +216,10 @@ export function ActiveQuests() {
       skill: quest.skill,
       xp: quest.xp,
       rating: quest.rating,
+      frequency: quest.frequency,
+      frequencyCount: quest.frequencyCount,
+      frequencyPeriodDays: quest.frequencyPeriodDays,
+      resetTime: quest.resetTime,
     })
   }
 
@@ -182,6 +231,10 @@ export function ActiveQuests() {
       skill: editingQuest.skill,
       xp: editingQuest.xp,
       rating: editingQuest.rating,
+      frequency: editingQuest.frequency,
+      frequencyCount: editingQuest.frequencyCount,
+      frequencyPeriodDays: editingQuest.frequencyPeriodDays,
+      resetTime: editingQuest.resetTime,
     })
     setEditingQuest(null)
   }
@@ -192,12 +245,20 @@ export function ActiveQuests() {
   }
 
   const renderQuestCard = (quest: any, category: "plans" | "dailies" | "habits", isArchived = false) => {
-    const skillColor = skillColors[quest.skill] || uiColor
+    const skillColor = areaColors[quest.skill] || uiColor
+    const priorityBorder =
+      quest.rating === "fast"
+        ? "border-l-lime-500"
+        : quest.rating === "short"
+        ? "border-l-cyan-400"
+        : quest.rating === "deep"
+        ? "border-l-amber-500"
+        : "border-l-gray-300"
 
     return (
       <Card
         key={quest.id}
-        className={`bg-card border-border ${isArchived ? "opacity-50" : quest.completed ? "opacity-70" : ""}`}
+        className={`bg-card border-border border-l-4 ${priorityBorder} ${isArchived ? "opacity-50" : quest.completed ? "opacity-70" : ""}`}
       >
         <CardContent className="p-4">
           <div className="flex items-start gap-3">
@@ -206,7 +267,7 @@ export function ActiveQuests() {
               onCheckedChange={() => {
                 handleToggleQuest(category, quest.id, quest.xp, quest.completed, quest.title, quest.skill)
               }}
-              className="mt-1"
+              className="mt-1 h-5 w-5 border border-gray-300"
               disabled={isArchived}
             />
             <div className="flex-1 space-y-2">
@@ -227,6 +288,12 @@ export function ActiveQuests() {
                   >
                     {quest.skill}
                   </Badge>
+                  {category === "habits" && (
+                    <span className="text-xs flex items-center gap-1">
+                      <span>🔥</span>
+                      {(quest as any).streak || 0}
+                    </span>
+                  )}
                   {!isArchived && (
                     <>
                       <Button
@@ -276,19 +343,27 @@ export function ActiveQuests() {
     )
   }
 
+  const priorityOrder: Record<string, number> = { fast: 0, short: 1, deep: 2, hard: 3 }
+
   const getActiveQuests = (category: "plans" | "dailies" | "habits") =>
-    quests[category].filter((q: any) => {
-      const isActive = q.archivedAt === null
-      if (selectedFilterSkill === "All") return isActive
-      return isActive && q.skill === selectedFilterSkill
-    })
+    quests[category]
+      .filter((q: any) => {
+        const isActive = q.archivedAt === null
+        if (!selectedAreas || selectedAreas.length === 0) return isActive
+        return isActive && selectedAreas.includes(q.skill)
+      })
+      .sort((a: any, b: any) => {
+        const pa = priorityOrder[a.rating] ?? 99
+        const pb = priorityOrder[b.rating] ?? 99
+        return pa - pb
+      })
 
   const getArchivedQuests = (category: "plans" | "dailies" | "habits") =>
     quests[category]
       .filter((q: any) => {
         const isArchived = q.archivedAt !== null
-        if (selectedFilterSkill === "All") return isArchived
-        return isArchived && q.skill === selectedFilterSkill
+        if (!selectedAreas || selectedAreas.length === 0) return isArchived
+        return isArchived && selectedAreas.includes(q.skill)
       })
       .sort((a: any, b: any) => (a.archivedAt || 0) - (b.archivedAt || 0))
 
@@ -331,13 +406,8 @@ export function ActiveQuests() {
     <>
       <Card className="bg-card border-border" onClick={handleCardClick}>
         <CardHeader>
-          <CardTitle className="text-foreground font-mono" style={{ color: uiColor }}>
+          <CardTitle className="text-foreground" style={{ color: uiColor }}>
             ACTIVE QUESTS
-            {selectedFilterSkill !== "All" && (
-              <span className="text-sm font-normal text-muted-foreground ml-2">
-                (Filtered by {selectedFilterSkill})
-              </span>
-            )}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -348,21 +418,7 @@ export function ActiveQuests() {
               <TabsTrigger value="habits">Habits</TabsTrigger>
             </TabsList>
 
-            <div className="mt-4 mb-2">
-              <Select value={selectedFilterSkill} onValueChange={setSelectedFilterSkill}>
-                <SelectTrigger className="w-full bg-input">
-                  <SelectValue placeholder="Filter by skill" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="All">All Skills</SelectItem>
-                  {allSkills.map((skill) => (
-                    <SelectItem key={skill} value={skill}>
-                      {skill}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <div className="mt-4 mb-2"></div>
 
             <TabsContent value="plans">{renderTabContent("plans")}</TabsContent>
             <TabsContent value="dailies">{renderTabContent("dailies")}</TabsContent>
@@ -374,7 +430,7 @@ export function ActiveQuests() {
       <Dialog open={!!editingQuest} onOpenChange={(open) => !open && setEditingQuest(null)}>
         <DialogContent className="bg-card border-border">
           <DialogHeader>
-            <DialogTitle className="text-primary font-mono">EDIT QUEST</DialogTitle>
+            <DialogTitle className="text-primary">EDIT QUEST</DialogTitle>
           </DialogHeader>
           {editingQuest && (
             <div className="space-y-4 py-4">
@@ -387,21 +443,40 @@ export function ActiveQuests() {
                   className="bg-input"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="skill">Which Skill</Label>
-                <Select
-                  value={editingQuest.skill}
-                  onValueChange={(value) => setEditingQuest({ ...editingQuest, skill: value })}
-                >
-                  <SelectTrigger id="skill" className="bg-input">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Branding">Branding</SelectItem>
-                    <SelectItem value="Sport">Sport</SelectItem>
-                    <SelectItem value="General">General</SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="skill">Area</Label>
+                  <Select
+                    value={editingQuest.skill}
+                    onValueChange={(value) => setEditingQuest({ ...editingQuest, skill: value })}
+                  >
+                    <SelectTrigger id="skill" className="bg-input">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Branding">Branding</SelectItem>
+                      <SelectItem value="Sport">Sport</SelectItem>
+                      <SelectItem value="General">General</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="rating">Priority</Label>
+                  <Select
+                    value={editingQuest.rating}
+                    onValueChange={(value) => setEditingQuest({ ...editingQuest, rating: value })}
+                  >
+                    <SelectTrigger id="rating" className="bg-input">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="fast">Fast</SelectItem>
+                      <SelectItem value="short">Short</SelectItem>
+                      <SelectItem value="deep">Deep</SelectItem>
+                      <SelectItem value="hard">Hard</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="xp-amount">Amount of XP</Label>
@@ -413,24 +488,71 @@ export function ActiveQuests() {
                   className="bg-input"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="rating">Skill Rating</Label>
-                <Select
-                  value={editingQuest.rating}
-                  onValueChange={(value) => setEditingQuest({ ...editingQuest, rating: value })}
-                >
-                  <SelectTrigger id="rating" className="bg-input">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="daily">Daily</SelectItem>
-                    <SelectItem value="average">Average</SelectItem>
-                    <SelectItem value="weekly">Weekly</SelectItem>
-                    <SelectItem value="monthly">Monthly</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+              {editingQuest.category === "dailies" && (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="frequency-count">Times</Label>
+                      <Select
+                        value={String(editingQuest.frequencyCount ?? editingQuest.frequency ?? 1)}
+                        onValueChange={(value) =>
+                          setEditingQuest({ ...editingQuest, frequencyCount: Number(value) })
+                        }
+                      >
+                        <SelectTrigger id="frequency-count" className="bg-input">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {[...Array(10)].map((_, i) => (
+                            <SelectItem key={i + 1} value={String(i + 1)}>
+                              {i + 1}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="frequency-period">Per days</Label>
+                      <Select
+                        value={String(editingQuest.frequencyPeriodDays ?? 1)}
+                        onValueChange={(value) =>
+                          setEditingQuest({ ...editingQuest, frequencyPeriodDays: Number(value) })
+                        }
+                      >
+                        <SelectTrigger id="frequency-period" className="bg-input">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {[...Array(14)].map((_, i) => (
+                            <SelectItem key={i + 1} value={String(i + 1)}>
+                              {i + 1}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="reset-time">Reset Time (UTC)</Label>
+                      <Select
+                        value={(editingQuest.resetTime || "00:00")}
+                        onValueChange={(value) => setEditingQuest({ ...editingQuest, resetTime: value })}
+                      >
+                        <SelectTrigger id="reset-time" className="bg-input">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {[...Array(24)].map((_, h) => {
+                            const label = `${String(h).padStart(2, "0")}:00`
+                            return (
+                              <SelectItem key={label} value={label}>
+                                {label}
+                              </SelectItem>
+                            )
+                          })}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditingQuest(null)}>

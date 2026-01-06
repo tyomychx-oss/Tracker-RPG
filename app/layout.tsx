@@ -8,7 +8,7 @@ const _geist = Geist({ subsets: ["latin"] })
 const _geistMono = Geist_Mono({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "Vibecoding Tracker - Gamified Life RPG",
+  title: "Gamified Life RPG",
   description: "A minimalist cyberpunk dashboard for tracking your life like an RPG",
   generator: "v0.app",
   icons: {
@@ -37,7 +37,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
-      <body className={`font-sans antialiased`}>
+      <body className={`font-sans antialiased`} suppressHydrationWarning>
         {children}
         <Analytics />
       </body>

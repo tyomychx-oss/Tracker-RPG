@@ -6,10 +6,12 @@ import { createContext, useContext, useState, useEffect, type ReactNode } from "
 // --- Interfaces ---
 export interface XPContextType {
   totalXP: number
+  accumulatedXP: number
   currentLevel: number
   maxXP: number
   addXP: (amount: number) => void
   removeXP: (amount: number) => void
+  resetXP: () => void
   restorePreviousState: (previousLevel: number, previousXP: number, previousMaxXP: number) => void
 }
 
@@ -50,11 +52,14 @@ export interface QuestsContextType {
   addQuest: (category: "plans" | "dailies" | "habits", quest: Quest) => void
   updateQuest: (category: "plans" | "dailies" | "habits", questId: number, updates: Partial<Quest>) => void
   deleteQuest: (category: "plans" | "dailies" | "habits", questId: number) => void
+  deleteQuestsBySkill: (skill: string) => void
+  resetQuests: () => void
 }
 
 export interface RecentActivityContextType {
-  activities: Array<{ id: number; action: string; timestamp: number; xp?: number }>
-  addActivity: (action: string, xp?: number) => void
+  activities: Array<{ id: number; action: string; timestamp: number; xp?: number; type?: "plans" | "dailies" | "habits" }>
+  addActivity: (action: string, xp?: number, type?: "plans" | "dailies" | "habits") => void
+  resetActivities: () => void
 }
 
 export interface UIColorContextType {
@@ -87,9 +92,10 @@ export interface UserProfile {
     dailies: Quest[]
     habits: Quest[]
   }
-  activities: Array<{ id: number; action: string; timestamp: number; xp?: number }>
+  activities: Array<{ id: number; action: string; timestamp: number; xp?: number; type?: "plans" | "dailies" | "habits" }>
   uiColor: string
   taskSnapshots?: Record<number, TaskStateSnapshot>
+  archivedSkills?: string[]
 }
 
 export interface AreasContextType {
@@ -209,9 +215,11 @@ export function useSkillFilter() {
 // --- Providers ---
 
 export function XPProvider({ children }: { children: ReactNode }) {
-  const [totalXP, setTotalXP] = useState(0)
-  const [currentLevel, setCurrentLevel] = useState(1)
-  const [maxXP, setMaxXP] = useState(200)
+  const [xpState, setXPState] = useState({
+    totalXP: 0,
+    currentLevel: 1,
+    maxXP: 200,
+  })
   const [isLoaded, setIsLoaded] = useState(false)
 
   useEffect(() => {
@@ -273,40 +281,121 @@ export function XPProvider({ children }: { children: ReactNode }) {
     return { level, currentXP: remainingXP, maxXP }
   }
 
+  useEffect(() => {
+    const storedProfile = localStorage.getItem("currentUserProfile")
+    if (storedProfile) {
+      const profile: UserProfile = JSON.parse(storedProfile)
+      
+      // Calculate Accumulated XP from profile
+      const accXP = calculateTotalXP(profile.currentLevel || 1, profile.totalXP || 0, profile.maxXP || 200)
+      
+      // Calculate Daily XP from activities
+      let dailyXP = 0
+      if (profile.activities) {
+        const today = new Date().toDateString()
+        dailyXP = profile.activities
+          .filter((a) => {
+             const isToday = new Date(a.timestamp).toDateString() === today
+             // Only count positive XP gains (completed tasks), ignore penalties for now or handle net?
+             // User said "Daily XP Progress writes 1050". That chart usually sums positive gains.
+             // But if I uncomplete a task, I lose XP.
+             // If I sum ALL activities (pos and neg) for today:
+             return isToday
+          })
+          .reduce((sum, a) => sum + (a.xp || 0), 0)
+      }
+      
+      // If Accumulated XP is less than Daily XP (meaning we lost track of some XP), sync it up.
+      // We only sync if accXP < dailyXP. If accXP > dailyXP, it's fine (previous days' XP).
+      if (accXP < dailyXP) {
+        const { level, currentXP, maxXP } = calculateLevelFromTotalXP(dailyXP)
+        setXPState({
+          totalXP: currentXP,
+          currentLevel: level,
+          maxXP: maxXP,
+        })
+      } else {
+        setXPState({
+          totalXP: profile.totalXP || 0,
+          currentLevel: profile.currentLevel || 1,
+          maxXP: profile.maxXP || 200,
+        })
+      }
+    }
+    setIsLoaded(true)
+  }, [])
+
+  useEffect(() => {
+    if (!isLoaded) return
+    const storedProfile = localStorage.getItem("currentUserProfile")
+    if (storedProfile) {
+      const profile: UserProfile = JSON.parse(storedProfile)
+      profile.totalXP = xpState.totalXP
+      profile.currentLevel = xpState.currentLevel
+      profile.maxXP = xpState.maxXP
+      localStorage.setItem("currentUserProfile", JSON.stringify(profile))
+      localStorage.setItem(`userProfile_${profile.nickname}`, JSON.stringify(profile))
+    }
+  }, [xpState, isLoaded])
+
+  // Calculate accumulated XP for consumption
+  const accumulatedXP = calculateTotalXP(xpState.currentLevel, xpState.totalXP, xpState.maxXP)
+
   const addXP = (amount: number) => {
-    setTotalXP((prev) => {
-      const totalXPBefore = calculateTotalXP(currentLevel, prev, maxXP)
+    setXPState((prev) => {
+      const totalXPBefore = calculateTotalXP(prev.currentLevel, prev.totalXP, prev.maxXP)
       const totalXPAfter = totalXPBefore + amount
       const { level, currentXP, maxXP: newMaxXP } = calculateLevelFromTotalXP(totalXPAfter)
-      if (level !== currentLevel) {
-        setCurrentLevel(level)
-        setMaxXP(newMaxXP)
+      return {
+        currentLevel: level,
+        totalXP: currentXP,
+        maxXP: newMaxXP,
       }
-      return currentXP
     })
   }
 
   const removeXP = (amount: number) => {
-    setTotalXP((prev) => {
-      const totalXPBefore = calculateTotalXP(currentLevel, prev, maxXP)
+    setXPState((prev) => {
+      const totalXPBefore = calculateTotalXP(prev.currentLevel, prev.totalXP, prev.maxXP)
       const totalXPAfter = Math.max(0, totalXPBefore - amount)
       const { level, currentXP, maxXP: newMaxXP } = calculateLevelFromTotalXP(totalXPAfter)
-      if (level !== currentLevel) {
-        setCurrentLevel(level)
-        setMaxXP(newMaxXP)
+      return {
+        currentLevel: level,
+        totalXP: currentXP,
+        maxXP: newMaxXP,
       }
-      return currentXP
+    })
+  }
+
+  const resetXP = () => {
+    setXPState({
+      totalXP: 0,
+      currentLevel: 1,
+      maxXP: 200,
     })
   }
 
   const restorePreviousState = (previousLevel: number, previousXP: number, previousMaxXP: number) => {
-    setCurrentLevel(previousLevel)
-    setTotalXP(previousXP)
-    setMaxXP(previousMaxXP)
+    setXPState({
+      currentLevel: previousLevel,
+      totalXP: previousXP,
+      maxXP: previousMaxXP,
+    })
   }
 
   return (
-    <XPContext.Provider value={{ totalXP, currentLevel, maxXP, addXP, removeXP, restorePreviousState }}>
+    <XPContext.Provider
+      value={{
+        totalXP: xpState.totalXP,
+        accumulatedXP,
+        currentLevel: xpState.currentLevel,
+        maxXP: xpState.maxXP,
+        addXP,
+        removeXP,
+        resetXP,
+        restorePreviousState,
+      }}
+    >
       {children}
     </XPContext.Provider>
   )
@@ -468,13 +557,31 @@ export function QuestsProvider({ children }: { children: ReactNode }) {
     }))
   }
 
+  const deleteQuestsBySkill = (skill: string) => {
+    setQuests((prev) => ({
+      plans: prev.plans.filter((q) => q.skill !== skill),
+      dailies: prev.dailies.filter((q) => q.skill !== skill),
+      habits: prev.habits.filter((q) => q.skill !== skill),
+    }))
+  }
+
+  const resetQuests = () => {
+    setQuests((prev) => ({
+      plans: prev.plans.map(q => ({ ...q, completed: false, lastCompletedDate: null })),
+      dailies: prev.dailies.map(q => ({ ...q, completed: false, lastCompletedDate: null })),
+      habits: prev.habits.map(q => ({ ...q, completed: false, lastCompletedDate: null })),
+    }))
+  }
+
   return (
-    <QuestsContext.Provider value={{ quests, addQuest, updateQuest, deleteQuest }}>{children}</QuestsContext.Provider>
+    <QuestsContext.Provider value={{ quests, addQuest, updateQuest, deleteQuest, deleteQuestsBySkill, resetQuests }}>{children}</QuestsContext.Provider>
   )
 }
 
 export function RecentActivityProvider({ children }: { children: ReactNode }) {
-  const [activities, setActivities] = useState<Array<{ id: number; action: string; timestamp: number; xp?: number }>>([])
+  const [activities, setActivities] = useState<
+    Array<{ id: number; action: string; timestamp: number; xp?: number; type?: "plans" | "dailies" | "habits" }>
+  >([])
   const [isLoaded, setIsLoaded] = useState(false)
 
   useEffect(() => {
@@ -505,11 +612,15 @@ export function RecentActivityProvider({ children }: { children: ReactNode }) {
     }
   }, [activities, isLoaded])
 
-  const addActivity = (action: string, xp?: number) => {
-    setActivities((prev) => [{ id: Date.now(), action, timestamp: Date.now(), xp }, ...prev.slice(0, 9)])
+  const addActivity = (action: string, xp?: number, type?: "plans" | "dailies" | "habits") => {
+    setActivities((prev) => [{ id: Date.now(), action, timestamp: Date.now(), xp, type }, ...prev.slice(0, 999)])
   }
 
-  return <RecentActivityContext.Provider value={{ activities, addActivity }}>{children}</RecentActivityContext.Provider>
+  const resetActivities = () => {
+    setActivities([])
+  }
+
+  return <RecentActivityContext.Provider value={{ activities, addActivity, resetActivities }}>{children}</RecentActivityContext.Provider>
 }
 
 export function UIColorProvider({ children }: { children: ReactNode }) {
@@ -557,6 +668,10 @@ export function AreasProvider({ children }: { children: ReactNode }) {
   const [areas, setAreas] = useState<string[]>([])
   const [archivedAreas, setArchivedAreas] = useState<string[]>([])
   const [isLoaded, setIsLoaded] = useState(false)
+  const { deleteSkillXP, skillXPs } = useSkillXP()
+  const { deleteSkillColor } = useSkillColors()
+  const { deleteQuestsBySkill } = useQuests()
+  const { removeXP } = useXP()
 
   useEffect(() => {
     const storedProfile = localStorage.getItem("currentUserProfile")
@@ -602,6 +717,26 @@ export function AreasProvider({ children }: { children: ReactNode }) {
       localStorage.setItem(`userProfile_${profile.nickname}`, JSON.stringify(profile))
       window.location.reload()
     }
+
+    // Update other contexts which will handle their own state and localStorage sync
+    deleteSkillXP(skillName)
+    deleteSkillColor(skillName)
+    deleteQuestsBySkill(skillName)
+  }
+
+  const archiveSkill = (skillName: string) => {
+    setSkills((prev) => prev.filter((s) => s !== skillName))
+    setArchivedSkills((prev) => [...prev, skillName])
+  }
+
+  const unarchiveSkill = (skillName: string) => {
+    setArchivedSkills((prev) => prev.filter((s) => s !== skillName))
+    setSkills((prev) => [...prev, skillName])
+  }
+
+  const resetSkills = () => {
+    setSkills([])
+    setArchivedSkills([])
   }
 
   const archiveArea = (areaName: string) => {

@@ -13,7 +13,11 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Pencil, ChevronDown, ChevronUp, Trash2 } from "lucide-react"
+<<<<<<< HEAD
 import { useXP, useAreaColors, useAreaFilter, useRecentActivity, useUIColor, useAreaXP, useQuests } from "@/components/providers"
+=======
+import { useXP, useSkillColors, useSkillFilter, useRecentActivity, useUIColor, useSkillXP, useQuests, useSkills } from "@/components/providers"
+>>>>>>> b1fd9032d920d5415d497c4e07a148179baa6feb
 
 interface TaskStateSnapshot {
   questId: number
@@ -26,9 +30,17 @@ interface TaskStateSnapshot {
 export function ActiveQuests() {
   const { quests, updateQuest, deleteQuest } = useQuests()
   const { addXP, removeXP, currentLevel, totalXP, maxXP, restorePreviousState } = useXP()
+<<<<<<< HEAD  
   const { addAreaXP, removeAreaXP, areaXPs } = useAreaXP()
   const { areaColors } = useAreaColors()
   const { selectedAreas } = useAreaFilter()
+=======
+  const { addSkillXP, removeSkillXP, skillXPs } = useSkillXP()
+  const { skillColors } = useSkillColors()
+  const { archivedSkills } = useSkills()
+  const [selectedFilterSkill, setSelectedFilterSkill] = useState<string>("All")
+  const { selectedSkill, setSelectedSkill } = useSkillFilter()
+>>>>>>> b1fd9032d920d5415d497c4e07a148179baa6feb
   const { addActivity } = useRecentActivity()
   const { uiColor } = useUIColor()
   const [showArchived, setShowArchived] = useState({
@@ -155,7 +167,7 @@ export function ActiveQuests() {
         removeXP(xpAmount)
         removeAreaXP(skillName, xpAmount)
       }
-      addActivity(`Uncompleted: ${questTitle}`, -xpAmount)
+      addActivity(`Uncompleted: ${questTitle}`, -xpAmount, category)
       updateQuest(category, questId, { completed: false, lastCompletedDate: null })
     } else {
       const snapshot: TaskStateSnapshot = {
@@ -169,6 +181,7 @@ export function ActiveQuests() {
 
       // Add XP
       addXP(xpAmount)
+<<<<<<< HEAD
       addAreaXP(skillName, xpAmount)
       addActivity(`Completed: ${questTitle}`, xpAmount)
       if (category === "habits") {
@@ -189,6 +202,11 @@ export function ActiveQuests() {
       } else {
         updateQuest(category, questId, { completed: true, lastCompletedDate: today })
       }
+=======
+      addSkillXP(skillName, xpAmount)
+      addActivity(`Completed: ${questTitle}`, xpAmount, category)
+      updateQuest(category, questId, { completed: true, lastCompletedDate: today })
+>>>>>>> b1fd9032d920d5415d497c4e07a148179baa6feb
     }
   }
 
@@ -242,6 +260,34 @@ export function ActiveQuests() {
   const handleDeleteQuest = (category: "plans" | "dailies" | "habits", questId: number, questTitle: string) => {
     deleteQuest(category, questId)
     addActivity(`Deleted: ${questTitle}`)
+  }
+
+  const BASIC_COLORS = [
+    "#ef4444",
+    "#f97316",
+    "#f59e0b",
+    "#eab308",
+    "#84cc16",
+    "#10b981",
+    "#059669",
+    "#14b8a6",
+    "#06b6d4",
+    "#0ea5e9",
+    "#3b82f6",
+    "#a855f7",
+  ]
+
+  const getSkillColor = (skillName: string) => {
+    if (skillColors[skillName]) return skillColors[skillName]
+    
+    // Generate a deterministic color index based on skill name string
+    let hash = 0
+    for (let i = 0; i < skillName.length; i++) {
+      hash = skillName.charCodeAt(i) + ((hash << 5) - hash)
+    }
+    
+    const index = Math.abs(hash) % BASIC_COLORS.length
+    return BASIC_COLORS[index]
   }
 
   const renderQuestCard = (quest: any, category: "plans" | "dailies" | "habits", isArchived = false) => {
@@ -361,6 +407,7 @@ export function ActiveQuests() {
   const getArchivedQuests = (category: "plans" | "dailies" | "habits") =>
     quests[category]
       .filter((q: any) => {
+        if (archivedSkills?.includes(q.skill)) return false
         const isArchived = q.archivedAt !== null
         if (!selectedAreas || selectedAreas.length === 0) return isArchived
         return isArchived && selectedAreas.includes(q.skill)
@@ -372,6 +419,7 @@ export function ActiveQuests() {
   }
 
   const allSkills = Array.from(new Set([...quests.plans, ...quests.dailies, ...quests.habits].map((q: any) => q.skill)))
+    .filter(skill => !archivedSkills?.includes(skill))
 
   const renderTabContent = (category: "plans" | "dailies" | "habits") => {
     const activeQuests = getActiveQuests(category)

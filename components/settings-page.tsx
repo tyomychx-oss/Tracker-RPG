@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
-import { useNickname, useUIColor, useXP, useSkillXP, useRecentActivity } from "@/components/providers"
+import { useNickname, useUIColor, useXP, useSkillXP, useSkills, useRecentActivity, useQuests } from "@/components/providers"
 
 const INTERFACE_COLORS = [
   { name: "Terracotta", value: "#de6550" },
@@ -26,9 +26,11 @@ const INTERFACE_COLORS = [
 export function SettingsPage() {
   const { nickname, setNickname } = useNickname()
   const { uiColor, setUIColor } = useUIColor()
-  const { restorePreviousState } = useXP()
-  const { skillXPs, removeSkillXP } = useSkillXP()
-  const { activities } = useRecentActivity()
+  const { resetXP } = useXP()
+  const { skillXPs, removeSkillXP, resetSkillXPs } = useSkillXP()
+  const { resetSkills } = useSkills()
+  const { activities, resetActivities } = useRecentActivity()
+  const { resetQuests } = useQuests()
   const [tempNickname, setTempNickname] = useState(nickname)
   const [showNicknameSaved, setShowNicknameSaved] = useState(false)
   const [showColorSaved, setShowColorSaved] = useState(false)
@@ -51,44 +53,21 @@ export function SettingsPage() {
   }
 
   const handleRemoveProgress = () => {
+    // Manually clear taskSnapshots in localStorage as it's not managed by a global context
     const storedProfile = localStorage.getItem("currentUserProfile")
     if (storedProfile) {
       const profile = JSON.parse(storedProfile)
-      
-      // Reset all progress
-      profile.totalXP = 0
-      profile.currentLevel = 1
-      profile.maxXP = 200
-      profile.skillXPs = {}
-      profile.activities = []
       profile.taskSnapshots = {}
-      
-      // Reset quests completion status but keep the quests themselves
-      if (profile.quests) {
-        profile.quests.plans = profile.quests.plans.map((q: any) => ({
-          ...q,
-          completed: false,
-          lastCompletedDate: null,
-        }))
-        profile.quests.dailies = profile.quests.dailies.map((q: any) => ({
-          ...q,
-          completed: false,
-          lastCompletedDate: null,
-        }))
-        profile.quests.habits = profile.quests.habits.map((q: any) => ({
-          ...q,
-          completed: false,
-          lastCompletedDate: null,
-        }))
-      }
-      
-      // Save updated profile
       localStorage.setItem("currentUserProfile", JSON.stringify(profile))
       localStorage.setItem(`userProfile_${profile.nickname}`, JSON.stringify(profile))
-      
-      // Reload to apply changes
-      window.location.reload()
     }
+
+    // Reset state via contexts
+    resetXP()
+    resetSkillXPs()
+    resetSkills()
+    resetActivities()
+    resetQuests()
   }
 
   return (

@@ -48,6 +48,12 @@ export function SkillsListEditable() {
     return { name, level, xp }
   })
 
+  const archivedSkills = archivedList.map((name) => {
+    const xp = skillXPs[name] || 0
+    const level = Math.floor(xp / 100) + 1
+    return { name, level, xp }
+  })
+
   const handleEdit = (skillName: string) => {
     setEditingSkill(skillName)
     setEditingSkillName(skillName)
@@ -110,6 +116,16 @@ export function SkillsListEditable() {
     setDeletingSkill(null)
   }
 
+  const handleArchive = (skillName: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    archiveSkill(skillName)
+  }
+
+  const handleUnarchive = (skillName: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    unarchiveSkill(skillName)
+  }
+
   return (
     <>
       <Card className="bg-card border-border">
@@ -134,10 +150,12 @@ export function SkillsListEditable() {
                   selectedAreas.includes(skill.name) ? "bg-primary/10 border-l-4 border-l-primary" : ""
                 }`}
               >
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-12">
                   <span className="font-semibold text-foreground">{skill.name}</span>
-                  <span className="text-sm text-muted-foreground">Level {skill.level}</span>
-                  <span className="text-sm text-muted-foreground">{skill.xp} XP</span>
+                  <div className="flex gap-4">
+                    <span className="text-sm text-muted-foreground">Level {skill.level}</span>
+                    <span className="text-sm text-muted-foreground">{skill.xp} XP</span>
+                  </div>
                 </div>
                 <div className="flex items-center gap-1">
                   <Tooltip>
@@ -193,6 +211,55 @@ export function SkillsListEditable() {
                 </div>
               </div>
             ))
+          )}
+
+          {archivedSkills.length > 0 && (
+            <div className="pt-4 mt-4 border-t border-border">
+              <button
+                onClick={() => setShowArchived(!showArchived)}
+                className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 w-full justify-center transition-colors mb-2"
+              >
+                Archive {showArchived ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </button>
+
+              {showArchived && (
+                <div className="space-y-3">
+                  {archivedSkills.map((skill, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center justify-between py-2 border-b border-border last:border-0 px-2 -mx-2 opacity-75"
+                    >
+                      <div className="flex items-center gap-12">
+                        <span className="font-semibold text-muted-foreground">{skill.name}</span>
+                        <div className="flex gap-4">
+                          <span className="text-sm text-muted-foreground">Level {skill.level}</span>
+                          <span className="text-sm text-muted-foreground">{skill.xp} XP</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => handleUnarchive(skill.name, e)}
+                                className="h-8 w-8 p-0 hover:bg-secondary"
+                              >
+                                <Archive className="h-4 w-4 text-white rotate-180" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Unarchive</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
         </CardContent>
         <CardContent className="pt-0">

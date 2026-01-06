@@ -13,11 +13,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Pencil, ChevronDown, ChevronUp, Trash2 } from "lucide-react"
-<<<<<<< HEAD
 import { useXP, useAreaColors, useAreaFilter, useRecentActivity, useUIColor, useAreaXP, useQuests } from "@/components/providers"
-=======
-import { useXP, useSkillColors, useSkillFilter, useRecentActivity, useUIColor, useSkillXP, useQuests, useSkills } from "@/components/providers"
->>>>>>> b1fd9032d920d5415d497c4e07a148179baa6feb
 
 interface TaskStateSnapshot {
   questId: number
@@ -30,17 +26,9 @@ interface TaskStateSnapshot {
 export function ActiveQuests() {
   const { quests, updateQuest, deleteQuest } = useQuests()
   const { addXP, removeXP, currentLevel, totalXP, maxXP, restorePreviousState } = useXP()
-<<<<<<< HEAD  
   const { addAreaXP, removeAreaXP, areaXPs } = useAreaXP()
   const { areaColors } = useAreaColors()
   const { selectedAreas } = useAreaFilter()
-=======
-  const { addSkillXP, removeSkillXP, skillXPs } = useSkillXP()
-  const { skillColors } = useSkillColors()
-  const { archivedSkills } = useSkills()
-  const [selectedFilterSkill, setSelectedFilterSkill] = useState<string>("All")
-  const { selectedSkill, setSelectedSkill } = useSkillFilter()
->>>>>>> b1fd9032d920d5415d497c4e07a148179baa6feb
   const { addActivity } = useRecentActivity()
   const { uiColor } = useUIColor()
   const [showArchived, setShowArchived] = useState({
@@ -181,7 +169,6 @@ export function ActiveQuests() {
 
       // Add XP
       addXP(xpAmount)
-<<<<<<< HEAD
       addAreaXP(skillName, xpAmount)
       addActivity(`Completed: ${questTitle}`, xpAmount)
       if (category === "habits") {
@@ -202,11 +189,11 @@ export function ActiveQuests() {
       } else {
         updateQuest(category, questId, { completed: true, lastCompletedDate: today })
       }
-=======
+
       addSkillXP(skillName, xpAmount)
       addActivity(`Completed: ${questTitle}`, xpAmount, category)
       updateQuest(category, questId, { completed: true, lastCompletedDate: today })
->>>>>>> b1fd9032d920d5415d497c4e07a148179baa6feb
+ >>>>>>> b1fd9032d920d5415d497c4e07a148179baa6feb
     }
   }
 
@@ -249,7 +236,6 @@ export function ActiveQuests() {
       skill: editingQuest.skill,
       xp: editingQuest.xp,
       rating: editingQuest.rating,
-      frequency: editingQuest.frequency,
       frequencyCount: editingQuest.frequencyCount,
       frequencyPeriodDays: editingQuest.frequencyPeriodDays,
       resetTime: editingQuest.resetTime,
@@ -278,7 +264,8 @@ export function ActiveQuests() {
   ]
 
   const getSkillColor = (skillName: string) => {
-    if (skillColors[skillName]) return skillColors[skillName]
+    const skillColor = areaColors[skillName]
+    if (skillColor) return skillColor
     
     // Generate a deterministic color index based on skill name string
     let hash = 0
@@ -407,7 +394,7 @@ export function ActiveQuests() {
   const getArchivedQuests = (category: "plans" | "dailies" | "habits") =>
     quests[category]
       .filter((q: any) => {
-        if (archivedSkills?.includes(q.skill)) return false
+        if (selectedAreas?.length && !selectedAreas.includes(q.skill)) return false
         const isArchived = q.archivedAt !== null
         if (!selectedAreas || selectedAreas.length === 0) return isArchived
         return isArchived && selectedAreas.includes(q.skill)
@@ -419,7 +406,7 @@ export function ActiveQuests() {
   }
 
   const allSkills = Array.from(new Set([...quests.plans, ...quests.dailies, ...quests.habits].map((q: any) => q.skill)))
-    .filter(skill => !archivedSkills?.includes(skill))
+    .filter(skill => true)
 
   const renderTabContent = (category: "plans" | "dailies" | "habits") => {
     const activeQuests = getActiveQuests(category)
@@ -451,7 +438,7 @@ export function ActiveQuests() {
   }
 
   return (
-    <>
+    <div className="space-y-4">
       <Card className="bg-card border-border" onClick={handleCardClick}>
         <CardHeader>
           <CardTitle className="text-foreground" style={{ color: uiColor }}>
@@ -490,7 +477,7 @@ export function ActiveQuests() {
                   onChange={(e) => setEditingQuest({ ...editingQuest, title: e.target.value })}
                   className="bg-input"
                 />
-              </div>
+              
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-2">
                   <Label htmlFor="skill">Area</Label>
@@ -610,7 +597,26 @@ export function ActiveQuests() {
               Save Changes
             </Button>
           </DialogFooter>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingQuest(null)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveQuest} className="bg-primary text-primary-foreground">
+              Save Changes
+            </Button>
+          </DialogFooter>
         </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
+      </Dialog>
+    </div>
+  )
+}
       </Dialog>
     </>
   )

@@ -27,8 +27,8 @@ export function SettingsPage() {
   const { nickname, setNickname } = useNickname()
   const { uiColor, setUIColor } = useUIColor()
   const { resetXP } = useXP()
-  const { skillXPs, removeSkillXP, resetSkillXPs } = useSkillXP()
-  const { resetSkills } = useSkills()
+  const { skillXPs, removeSkillXP } = useSkillXP()
+  const { skills } = useSkills()
   const { activities, resetActivities } = useRecentActivity()
   const { resetQuests } = useQuests()
   const [tempNickname, setTempNickname] = useState(nickname)
@@ -64,8 +64,8 @@ export function SettingsPage() {
 
     // Reset state via contexts
     resetXP()
-    resetSkillXPs()
-    resetSkills()
+    Object.keys(skillXPs).forEach(skill => removeSkillXP(skill, skillXPs[skill]))
+    Object.keys(skills).forEach(skill => removeSkillXP(skill, (skills as unknown as Record<string, number>)[skill]))
     resetActivities()
     resetQuests()
   }

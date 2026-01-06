@@ -190,10 +190,10 @@ export function ActiveQuests() {
         updateQuest(category, questId, { completed: true, lastCompletedDate: today })
       }
 
-      addSkillXP(skillName, xpAmount)
+      ad32кdSkillXP(skillName, xpAmount)
       addActivity(`Completed: ${questTitle}`, xpAmount, category)
       updateQuest(category, questId, { completed: true, lastCompletedDate: today })
- >>>>>>> b1fd9032d920d5415d497c4e07a148179baa6feb
+>>>>>>> b1fd9032d920d5415d497c4e07a148179baa6feb
     }
   }
 

@@ -224,24 +224,16 @@ function StatisticsView({ uiColor }: { uiColor: string }) {
   const dailyXPData: Record<string, { total: number; tasks: number; daily: number; habits: number }> = {}
   activities.forEach((activity) => {
     if (activity.xp && activity.xp > 0) {
-<<<<<<< HEAD
       const d = new Date(activity.timestamp)
       const monthShort = d.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' })
       const day = d.getUTCDate()
       const date = `${monthShort} ${day}`
-      dailyXPData[date] = (dailyXPData[date] || 0) + activity.xp
-=======
-      const date = new Date(activity.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-      if (!dailyXPData[date]) {
-        dailyXPData[date] = { total: 0, tasks: 0, daily: 0, habits: 0 }
+      dailyXPData[date] = {
+        total: (dailyXPData[date]?.total || 0) + activity.xp,
+        tasks: dailyXPData[date]?.tasks || 0,
+        daily: dailyXPData[date]?.daily || 0,
+        habits: dailyXPData[date]?.habits || 0,
       }
-      
-      dailyXPData[date].total += activity.xp
-      
-      if (activity.type === 'plans') dailyXPData[date].tasks += activity.xp
-      else if (activity.type === 'dailies') dailyXPData[date].daily += activity.xp
-      else if (activity.type === 'habits') dailyXPData[date].habits += activity.xp
->>>>>>> b1fd9032d920d5415d497c4e07a148179baa6feb
     }
   })
 
@@ -399,11 +391,7 @@ function StatisticsView({ uiColor }: { uiColor: string }) {
                   />
                   <YAxis tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }} />
                   <Tooltip
-<<<<<<< HEAD
                     cursor={{ fill: '#27272a' }}
-=======
-                    cursor={{ fill: 'rgba(0, 0, 0, 0.2)' }}
->>>>>>> b1fd9032d920d5415d497c4e07a148179baa6feb
                     content={({ active, payload }) => {
                       if (!active || !payload || !payload[0]) return null;
                       const d = payload[0].payload;
@@ -473,25 +461,11 @@ function StatisticsView({ uiColor }: { uiColor: string }) {
                       if (!active || !payload || !payload[0]) return null;
                       const d = payload[0].payload;
                       const xp = d.XP;
-<<<<<<< HEAD
                       const date = d.date;
                       return (
                         <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'6px',padding:'8px',minWidth:'140px',color:'var(--foreground)'}}>
                           <div><b>{date}</b></div>
                           <div>Daily XP +{xp}</div>
-=======
-                      const tasks = d.Tasks;
-                      const daily = d.Daily;
-                      const habits = d.Habits;
-                      const date = d.date;
-                      return (
-                        <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'6px',padding:'8px',minWidth:'120px',color:'var(--foreground)'}}>
-                          <div><b>{date}</b></div>
-                          <div>Daily XP {xp}</div>
-                          <div>Tasks - {tasks}</div>
-                          <div>Daily - {daily}</div>
-                          <div>Habbits - {habits}</div>
->>>>>>> b1fd9032d920d5415d497c4e07a148179baa6feb
                         </div>
                       );
                     }}
@@ -556,20 +530,12 @@ function StatisticsView({ uiColor }: { uiColor: string }) {
                     content={({ active, payload }) => {
                       if (!active || !payload || !payload[0]) return null;
                       const d = payload[0].payload;
-<<<<<<< HEAD
-=======
-                      const level = d.Level;
->>>>>>> b1fd9032d920d5415d497c4e07a148179baa6feb
                       const name = d.name;
                       const level = d.Level;
                       return (
                         <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'6px',padding:'8px',minWidth:'120px',color:'var(--foreground)'}}>
                           <div><b>{name}</b></div>
-<<<<<<< HEAD
                           <div>Level - {level}</div>
-=======
-                          <div>Level {level}</div>
->>>>>>> b1fd9032d920d5415d497c4e07a148179baa6feb
                         </div>
                       );
                     }}

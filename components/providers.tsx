@@ -41,6 +41,14 @@ export interface Quest {
   completed: boolean
   archivedAt: number | null
   lastCompletedDate: string | null
+  frequency?: number
+  frequencyCount?: number
+  frequencyPeriodDays?: number
+  resetTime?: string
+  completedCount?: number
+  lastResetDate?: string | null
+  periodStartAt?: number
+  streak?: number
 }
 
 export interface QuestsContextType {
@@ -234,9 +242,9 @@ export function XPProvider({ children }: { children: ReactNode }) {
         .eq("user_id", session.user.id)
         .single();
       if (data) {
-        setTotalXP(data.total_xp || 0);
-        setCurrentLevel(data.current_level || 1);
-        setMaxXP(data.max_xp || 200);
+        setXPState((prev) => ({ ...prev, totalXP: data.total_xp || 0 }));
+        setXPState((prev) => ({ ...prev, currentLevel: data.current_level || 1 }));
+        setXPState((prev) => ({ ...prev, maxXP: data.max_xp || 200 }));
       }
       setIsLoaded(true);
     }
@@ -248,13 +256,13 @@ export function XPProvider({ children }: { children: ReactNode }) {
     const storedProfile = localStorage.getItem("currentUserProfile")
     if (storedProfile) {
       const profile: UserProfile = JSON.parse(storedProfile)
-      profile.totalXP = totalXP
-      profile.currentLevel = currentLevel
-      profile.maxXP = maxXP
+      profile.totalXP = xpState.totalXP
+      profile.currentLevel = xpState.currentLevel
+      profile.maxXP = xpState.maxXP
       localStorage.setItem("currentUserProfile", JSON.stringify(profile))
       localStorage.setItem(`userProfile_${profile.nickname}`, JSON.stringify(profile))
     }
-  }, [totalXP, currentLevel, maxXP, isLoaded])
+  }, [xpState.totalXP, xpState.currentLevel, xpState.maxXP, isLoaded])
 
   const calculateTotalXP = (level: number, currentXP: number, currentMaxXP: number): number => {
     let total = currentXP
@@ -668,8 +676,8 @@ export function AreasProvider({ children }: { children: ReactNode }) {
   const [areas, setAreas] = useState<string[]>([])
   const [archivedAreas, setArchivedAreas] = useState<string[]>([])
   const [isLoaded, setIsLoaded] = useState(false)
-  const { deleteSkillXP, skillXPs } = useSkillXP()
-  const { deleteSkillColor } = useSkillColors()
+  const { removeSkillXP, skillXPs } = useSkillXP()
+  const { skillColors } = useSkillColors()
   const { deleteQuestsBySkill } = useQuests()
   const { removeXP } = useXP()
 
@@ -719,24 +727,24 @@ export function AreasProvider({ children }: { children: ReactNode }) {
     }
 
     // Update other contexts which will handle their own state and localStorage sync
-    deleteSkillXP(skillName)
-    deleteSkillColor(skillName)
-    deleteQuestsBySkill(skillName)
+    removeSkillXP(areaName, 0)
+    delete skillColors[areaName]
+    deleteQuestsBySkill(areaName)
   }
 
   const archiveSkill = (skillName: string) => {
-    setSkills((prev) => prev.filter((s) => s !== skillName))
-    setArchivedSkills((prev) => [...prev, skillName])
+    setAreas((prev) => prev.filter((s) => s !== skillName))
+    setArchivedAreas((prev) => [...prev, skillName])
   }
 
   const unarchiveSkill = (skillName: string) => {
-    setArchivedSkills((prev) => prev.filter((s) => s !== skillName))
-    setSkills((prev) => [...prev, skillName])
+    setArchivedAreas((prev) => prev.filter((s) => s !== skillName))
+    setAreas((prev) => [...prev, skillName])
   }
 
   const resetSkills = () => {
-    setSkills([])
-    setArchivedSkills([])
+    setAreas([])
+    setArchivedAreas([])
   }
 
   const archiveArea = (areaName: string) => {

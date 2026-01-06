@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Pencil, Plus, Trash2, Archive, ChevronDown, ChevronUp } from "lucide-react"
-import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip"
 import { useAreaColors, useAreaFilter, useUIColor, useAreaXP, useAreas } from "@/components/providers"
 
 const BASIC_COLORS = [
@@ -48,8 +48,8 @@ export function SkillsListEditable() {
     return { name, level, xp }
   })
 
-  const archivedSkills = archivedList.map((name) => {
-    const xp = skillXPs[name] || 0
+  const archivedAreasList = (archivedAreas || []).map((name) => {
+    const xp = areaXPs?.[name] || 0
     const level = Math.floor(xp / 100) + 1
     return { name, level, xp }
   })
@@ -118,12 +118,12 @@ export function SkillsListEditable() {
 
   const handleArchive = (skillName: string, e: React.MouseEvent) => {
     e.stopPropagation()
-    archiveSkill(skillName)
+    archiveArea(skillName)
   }
 
   const handleUnarchive = (skillName: string, e: React.MouseEvent) => {
     e.stopPropagation()
-    unarchiveSkill(skillName)
+    unarchiveArea(skillName)
   }
 
   return (
@@ -213,27 +213,27 @@ export function SkillsListEditable() {
             ))
           )}
 
-          {archivedSkills.length > 0 && (
+          {archivedAreasList.length > 0 && (
             <div className="pt-4 mt-4 border-t border-border">
               <button
-                onClick={() => setShowArchived(!showArchived)}
+                onClick={() => setShowArchivedAreas(!showArchivedAreas)}
                 className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 w-full justify-center transition-colors mb-2"
               >
-                Archive {showArchived ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                Archive {showArchivedAreas ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               </button>
 
-              {showArchived && (
+              {showArchivedAreas && (
                 <div className="space-y-3">
-                  {archivedSkills.map((skill, index) => (
+                  {archivedAreasList.map((area, index) => (
                     <div
                       key={index}
                       className="flex items-center justify-between py-2 border-b border-border last:border-0 px-2 -mx-2 opacity-75"
                     >
                       <div className="flex items-center gap-12">
-                        <span className="font-semibold text-muted-foreground">{skill.name}</span>
+                        <span className="font-semibold text-muted-foreground">{area.name}</span>
                         <div className="flex gap-4">
-                          <span className="text-sm text-muted-foreground">Level {skill.level}</span>
-                          <span className="text-sm text-muted-foreground">{skill.xp} XP</span>
+                          <span className="text-sm text-muted-foreground">Level {area.level}</span>
+                          <span className="text-sm text-muted-foreground">{area.xp} XP</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-1">
@@ -243,7 +243,7 @@ export function SkillsListEditable() {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={(e) => handleUnarchive(skill.name, e)}
+                                onClick={(e) => handleUnarchive(area.name, e)}
                                 className="h-8 w-8 p-0 hover:bg-secondary"
                               >
                                 <Archive className="h-4 w-4 text-white rotate-180" />
@@ -275,14 +275,14 @@ export function SkillsListEditable() {
                 {archivedAreas.length === 0 ? (
                   <div className="text-sm text-muted-foreground text-center py-2">No archived areas</div>
                 ) : (
-                  archivedAreas.map((name) => (
-                    <div key={name} className="flex items-center justify-between py-2 px-2 rounded hover:bg-secondary/50">
-                      <span className="text-foreground">{name}</span>
+                  archivedAreasList.map((area) => (
+                    <div key={area.name} className="flex items-center justify-between py-2 px-2 rounded hover:bg-secondary/50">
+                      <span className="text-foreground">{area.name}</span>
                       <Button
                         variant="outline"
                         size="sm"
                         className="text-xs bg-transparent"
-                        onClick={() => unarchiveArea(name)}
+                        onClick={() => unarchiveArea(area.name)}
                       >
                         Unarchive
                       </Button>

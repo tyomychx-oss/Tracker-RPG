@@ -31,11 +31,13 @@ export function ActiveQuests() {
   const { selectedAreas } = useAreaFilter()
   const { addActivity } = useRecentActivity()
   const { uiColor } = useUIColor()
+  
   const [showArchived, setShowArchived] = useState({
     plans: false,
     dailies: false,
     habits: false,
   })
+
   const [editingQuest, setEditingQuest] = useState<{
     id: number
     category: "plans" | "dailies" | "habits"
@@ -77,6 +79,7 @@ export function ActiveQuests() {
     }
   }, [taskSnapshots, isSnapshotsLoaded])
 
+  // Daily Reset Logic
   useEffect(() => {
     const checkDailyReset = () => {
       const now = new Date()
@@ -85,6 +88,7 @@ export function ActiveQuests() {
       const currentUTC = `${utcHour}:${utcMinute}`
       const todayString = now.toDateString()
       const todayStartUTC = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+      
       ;(["dailies", "habits"] as const).forEach((category) => {
         quests[category].forEach((quest: any) => {
           const resetAt = quest.resetTime || "00:00"
@@ -94,11 +98,13 @@ export function ActiveQuests() {
               const periodStart = typeof quest.periodStartAt === "number" ? quest.periodStartAt : todayStartUTC
               const daysElapsed = Math.floor((todayStartUTC - periodStart) / 86400000)
               const shouldResetCount = daysElapsed >= periodDays
+              
               const updates: any = {
                 completed: false,
                 lastCompletedDate: null,
                 lastResetDate: todayString,
               }
+              
               if (shouldResetCount) {
                 updates.completedCount = 0
                 updates.periodStartAt = todayStartUTC
@@ -120,7 +126,7 @@ export function ActiveQuests() {
     const interval = setInterval(checkDailyReset, 60000) // Check every minute
 
     return () => clearInterval(interval)
-  }, [quests])
+  }, [quests, updateQuest])
 
   const handleToggleQuest = (
     category: "plans" | "dailies" | "habits",
@@ -134,16 +140,19 @@ export function ActiveQuests() {
     const questObj = quests[category].find((q: any) => q.id === questId) as any
 
     if (isCompleted) {
+      // UNCOMPLETE TASK
       const snapshot = taskSnapshots[questId]
       if (snapshot) {
         // Use snapshot to restore exact previous state
         restorePreviousState(snapshot.previousLevel, snapshot.previousXP, snapshot.previousMaxXP)
+        
         // Restore skill XP to previous amount
         const currentSkillXP = areaXPs[skillName] || 0
         const xpToRemove = currentSkillXP - snapshot.previousSkillXP
         if (xpToRemove > 0) {
           removeAreaXP(skillName, xpToRemove)
         }
+        
         // Remove snapshot
         setTaskSnapshots((prev) => {
           const newSnapshots = { ...prev }
@@ -151,13 +160,16 @@ export function ActiveQuests() {
           return newSnapshots
         })
       } else {
-        // Fallback: if snapshot is lost, use removeXP (which now handles level decreases properly)
+        // Fallback
         removeXP(xpAmount)
         removeAreaXP(skillName, xpAmount)
       }
+      
       addActivity(`Uncompleted: ${questTitle}`, -xpAmount, category)
       updateQuest(category, questId, { completed: false, lastCompletedDate: null })
+      
     } else {
+      // COMPLETE TASK
       const snapshot: TaskStateSnapshot = {
         questId,
         previousLevel: currentLevel,
@@ -170,7 +182,8 @@ export function ActiveQuests() {
       // Add XP
       addXP(xpAmount)
       addAreaXP(skillName, xpAmount)
-      addActivity(`Completed: ${questTitle}`, xpAmount)
+      addActivity(`Completed: ${questTitle}`, xpAmount, category) // Fixed duplicate calls here
+
       if (category === "habits") {
         const currentStreak = (questObj?.streak || 0) + 1
         updateQuest(category, questId, {
@@ -189,11 +202,6 @@ export function ActiveQuests() {
       } else {
         updateQuest(category, questId, { completed: true, lastCompletedDate: today })
       }
-
-      addSkillXP(skillName, xpAmount)
-      addActivity(`Completed: ${questTitle}`, xpAmount, category)
-      updateQuest(category, questId, { completed: true, lastCompletedDate: today })
->>>>>>> b1fd9032d920d5415d497c4e07a148179baa6feb
     }
   }
 
@@ -249,44 +257,18 @@ export function ActiveQuests() {
   }
 
   const BASIC_COLORS = [
-    "#ef4444",
-    "#f97316",
-    "#f59e0b",
-    "#eab308",
-    "#84cc16",
-    "#10b981",
-    "#059669",
-    "#14b8a6",
-    "#06b6d4",
-    "#0ea5e9",
-    "#3b82f6",
-    "#a855f7",
+    "#ef4444", "#f97316", "#f59e0b", "#eab308", "#84cc16", "#10b981",
+    "#059669", "#14b8a6", "#06b6d4", "#0ea5e9", "#3b82f6", "#a855f7",
   ]
-
-  const getSkillColor = (skillName: string) => {
-    const skillColor = areaColors[skillName]
-    if (skillColor) return skillColor
-    
-    // Generate a deterministic color index based on skill name string
-    let hash = 0
-    for (let i = 0; i < skillName.length; i++) {
-      hash = skillName.charCodeAt(i) + ((hash << 5) - hash)
-    }
-    
-    const index = Math.abs(hash) % BASIC_COLORS.length
-    return BASIC_COLORS[index]
-  }
 
   const renderQuestCard = (quest: any, category: "plans" | "dailies" | "habits", isArchived = false) => {
     const skillColor = areaColors[quest.skill] || uiColor
     const priorityBorder =
-      quest.rating === "fast"
-        ? "border-l-lime-500"
-        : quest.rating === "short"
-        ? "border-l-cyan-400"
-        : quest.rating === "deep"
-        ? "border-l-amber-500"
-        : "border-l-gray-300"
+      quest.rating === "fast" ? "border-l-lime-500"
+      : quest.rating === "short" ? "border-l-cyan-400"
+      : quest.rating === "deep" ? "border-l-amber-500"
+      : quest.rating === "hard" ? "border-l-red-500" // Added hard check
+      : "border-l-gray-300"
 
     return (
       <Card
@@ -405,9 +387,6 @@ export function ActiveQuests() {
     e.stopPropagation()
   }
 
-  const allSkills = Array.from(new Set([...quests.plans, ...quests.dailies, ...quests.habits].map((q: any) => q.skill)))
-    .filter(skill => true)
-
   const renderTabContent = (category: "plans" | "dailies" | "habits") => {
     const activeQuests = getActiveQuests(category)
     const archivedQuests = getArchivedQuests(category)
@@ -470,13 +449,14 @@ export function ActiveQuests() {
           {editingQuest && (
             <div className="space-y-4 py-4">
               <div className="space-y-2">
-                <Label htmlFor="plan-name">Plan Name</Label>
+                <Label htmlFor="plan-name">Quest Name</Label>
                 <Input
                   id="plan-name"
                   value={editingQuest.title}
                   onChange={(e) => setEditingQuest({ ...editingQuest, title: e.target.value })}
                   className="bg-input"
                 />
+              </div>
               
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-2">
@@ -492,6 +472,7 @@ export function ActiveQuests() {
                       <SelectItem value="Branding">Branding</SelectItem>
                       <SelectItem value="Sport">Sport</SelectItem>
                       <SelectItem value="General">General</SelectItem>
+                      {/* Note: You can map available areas here if you have access to them */}
                     </SelectContent>
                   </Select>
                 </div>
@@ -513,6 +494,7 @@ export function ActiveQuests() {
                   </Select>
                 </div>
               </div>
+              
               <div className="space-y-2">
                 <Label htmlFor="xp-amount">Amount of XP</Label>
                 <Input
@@ -523,83 +505,74 @@ export function ActiveQuests() {
                   className="bg-input"
                 />
               </div>
+
               {editingQuest.category === "dailies" && (
-                <>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div className="space-y-2">
-                      <Label htmlFor="frequency-count">Times</Label>
-                      <Select
-                        value={String(editingQuest.frequencyCount ?? editingQuest.frequency ?? 1)}
-                        onValueChange={(value) =>
-                          setEditingQuest({ ...editingQuest, frequencyCount: Number(value) })
-                        }
-                      >
-                        <SelectTrigger id="frequency-count" className="bg-input">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {[...Array(10)].map((_, i) => (
-                            <SelectItem key={i + 1} value={String(i + 1)}>
-                              {i + 1}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="frequency-period">Per days</Label>
-                      <Select
-                        value={String(editingQuest.frequencyPeriodDays ?? 1)}
-                        onValueChange={(value) =>
-                          setEditingQuest({ ...editingQuest, frequencyPeriodDays: Number(value) })
-                        }
-                      >
-                        <SelectTrigger id="frequency-period" className="bg-input">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {[...Array(14)].map((_, i) => (
-                            <SelectItem key={i + 1} value={String(i + 1)}>
-                              {i + 1}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="reset-time">Reset Time (UTC)</Label>
-                      <Select
-                        value={(editingQuest.resetTime || "00:00")}
-                        onValueChange={(value) => setEditingQuest({ ...editingQuest, resetTime: value })}
-                      >
-                        <SelectTrigger id="reset-time" className="bg-input">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {[...Array(24)].map((_, h) => {
-                            const label = `${String(h).padStart(2, "0")}:00`
-                            return (
-                              <SelectItem key={label} value={label}>
-                                {label}
-                              </SelectItem>
-                            )
-                          })}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="frequency-count">Times</Label>
+                    <Select
+                      value={String(editingQuest.frequencyCount ?? editingQuest.frequency ?? 1)}
+                      onValueChange={(value) =>
+                        setEditingQuest({ ...editingQuest, frequencyCount: Number(value) })
+                      }
+                    >
+                      <SelectTrigger id="frequency-count" className="bg-input">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {[...Array(10)].map((_, i) => (
+                          <SelectItem key={i + 1} value={String(i + 1)}>
+                            {i + 1}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="frequency-period">Per days</Label>
+                    <Select
+                      value={String(editingQuest.frequencyPeriodDays ?? 1)}
+                      onValueChange={(value) =>
+                        setEditingQuest({ ...editingQuest, frequencyPeriodDays: Number(value) })
+                      }
+                    >
+                      <SelectTrigger id="frequency-period" className="bg-input">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {[...Array(14)].map((_, i) => (
+                          <SelectItem key={i + 1} value={String(i + 1)}>
+                            {i + 1}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="reset-time">Reset Time (UTC)</Label>
+                    <Select
+                      value={(editingQuest.resetTime || "00:00")}
+                      onValueChange={(value) => setEditingQuest({ ...editingQuest, resetTime: value })}
+                    >
+                      <SelectTrigger id="reset-time" className="bg-input">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {[...Array(24)].map((_, h) => {
+                          const label = `${String(h).padStart(2, "0")}:00`
+                          return (
+                            <SelectItem key={label} value={label}>
+                              {label}
+                            </SelectItem>
+                          )
+                        })}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditingQuest(null)}>
-              Cancel
-            </Button>
-            <Button onClick={handleSaveQuest} className="bg-primary text-primary-foreground">
-              Save Changes
-            </Button>
-          </DialogFooter>
-              </div>
-            )}
-          </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditingQuest(null)}>
               Cancel
@@ -611,13 +584,5 @@ export function ActiveQuests() {
         </DialogContent>
       </Dialog>
     </div>
-  )
-}
-      </Dialog>
-    </div>
-  )
-}
-      </Dialog>
-    </>
   )
 }

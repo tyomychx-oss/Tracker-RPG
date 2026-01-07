@@ -1,26 +1,26 @@
 "use client"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { createClient } from "@/utils/supabase/client"
-import { Mail, Chrome } from "lucide-react"
+import { Mail } from "lucide-react"
 import Link from "next/link"
 
 export default function SignUpPage() {
-  const router = useRouter()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [nickname, setNickname] = useState("")
   const [error, setError] = useState("")
+  const [successMsg, setSuccessMsg] = useState("")
   const [loading, setLoading] = useState(false)
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
+    setSuccessMsg("")
     setLoading(true)
 
     if (!nickname.trim()) {
@@ -35,6 +35,7 @@ export default function SignUpPage() {
         email,
         password,
         options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
           data: {
             nickname: nickname.trim(),
           },
@@ -42,8 +43,9 @@ export default function SignUpPage() {
       })
 
       if (signUpError) {
-        if (signUpError.message.includes("already registered")) {
-          setError("An account with this email already exists")
+        const msg = signUpError.message?.toLowerCase() || ""
+        if (msg.includes("already registered") || msg.includes("already exists")) {
+          setError("Account already exists. Sign in!")
         } else {
           setError(signUpError.message)
         }
@@ -51,54 +53,9 @@ export default function SignUpPage() {
         return
       }
 
-      if (data.user) {
-        await supabase.auth.updateUser({
-          data: { nickname: nickname.trim() }
-        })
-
-        try {
-          if (typeof window !== "undefined") {
-            localStorage.setItem("lastEmail", email)
-          }
-        } catch {}
-
-        const { error: signInError } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        })
-
-        if (signInError) {
-          setError(signInError.message)
-          setLoading(false)
-          return
-        }
-
-        router.push("/")
-        router.refresh()
-      }
-    } catch (err) {
-      setError("An unexpected error occurred")
+      // Успішна реєстрація
+      setSuccessMsg("Verify your email!")
       setLoading(false)
-    }
-  }
-
-  const handleGoogleSignUp = async () => {
-    setError("")
-    setLoading(true)
-
-    try {
-      const supabase = createClient()
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-        },
-      })
-
-      if (error) {
-        setError(error.message)
-        setLoading(false)
-      }
     } catch (err) {
       setError("An unexpected error occurred")
       setLoading(false)
@@ -114,9 +71,17 @@ export default function SignUpPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Блок помилки */}
           {error && (
             <div className="p-3 bg-red-500/10 border border-red-500/50 rounded-md text-red-500 text-sm">
               {error}
+            </div>
+          )}
+
+          {/* Блок успіху */}
+          {successMsg && (
+            <div className="p-3 bg-green-500/10 border border-green-500/50 rounded-md text-green-500 text-sm">
+              {successMsg}
             </div>
           )}
 
@@ -130,6 +95,10 @@ export default function SignUpPage() {
                 type="text"
                 value={nickname}
                 onChange={(e) => setNickname(e.target.value)}
+                onFocus={() => {
+                  setError("")
+                  setSuccessMsg("")
+                }}
                 className="bg-input"
                 placeholder="Your name"
                 required
@@ -146,6 +115,10 @@ export default function SignUpPage() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                onFocus={() => {
+                  setError("")
+                  setSuccessMsg("")
+                }}
                 className="bg-input"
                 placeholder="your@email.com"
                 required
@@ -162,6 +135,10 @@ export default function SignUpPage() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                onFocus={() => {
+                  setError("")
+                  setSuccessMsg("")
+                }}
                 className="bg-input"
                 placeholder="••••••••"
                 required

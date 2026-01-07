@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { createClient } from "@/utils/supabase/client"
-import { Mail, Chrome } from "lucide-react"
+import { Mail } from "lucide-react"
 import Link from "next/link"
 
 export default function SignInPage() {
@@ -29,6 +29,7 @@ export default function SignInPage() {
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
+    setError("")
 
     try {
       const supabase = createClient()
@@ -39,11 +40,19 @@ export default function SignInPage() {
 
       if (error) {
         const msg = error.message?.toLowerCase() || ""
-        if (msg.includes("invalid") || msg.includes("credentials")) {
-          setError("Такого акаунта не знайдено")
-        } else {
-          setError(error.message)
+        
+        // Перевірка на непідтверджену пошту
+        if (msg.includes("email not confirmed")) {
+           setError("Verify your email!")
+        } 
+        // Перевірка на неправильні дані (акаунта не існує або пароль невірний)
+        else if (msg.includes("invalid login credentials")) {
+           setError("Account doesn't exist or wrong password!")
+        } 
+        else {
+           setError(error.message)
         }
+        
         setLoading(false)
         return
       }
@@ -56,29 +65,6 @@ export default function SignInPage() {
 
       router.push("/")
       router.refresh()
-    } catch (err) {
-      setError("An unexpected error occurred")
-      setLoading(false)
-    }
-  }
-
-  const handleGoogleSignIn = async () => {
-    setError("")
-    setLoading(true)
-
-    try {
-      const supabase = createClient()
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-        },
-      })
-
-      if (error) {
-        setError(error.message)
-        setLoading(false)
-      }
     } catch (err) {
       setError("An unexpected error occurred")
       setLoading(false)
@@ -144,6 +130,7 @@ export default function SignInPage() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                onFocus={() => setError("")}
                 className="bg-input"
                 placeholder="••••••••"
                 required
@@ -172,7 +159,3 @@ export default function SignInPage() {
     </div>
   )
 }
-
-
-
-

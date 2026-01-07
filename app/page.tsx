@@ -29,6 +29,8 @@ export default function Page() {
   const [showOnboarding, setShowOnboarding] = useState(false)
   const [tempNickname, setTempNickname] = useState("")
   const [isCheckingAuth, setIsCheckingAuth] = useState(true)
+  const [isMobile, setIsMobile] = useState(false)
+  const [quickAddOpen, setQuickAddOpen] = useState(false)
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -113,6 +115,20 @@ export default function Page() {
     checkAuth()
   }, [])
 
+  useEffect(() => {
+    const updateDevice = () => {
+      const width = typeof window !== "undefined" ? window.innerWidth : 1024
+      setIsMobile(width < 768)
+    }
+    updateDevice()
+    window.addEventListener("resize", updateDevice)
+    return () => window.removeEventListener("resize", updateDevice)
+  }, [])
+
+  useEffect(() => {
+    setQuickAddOpen(!isMobile)
+  }, [isMobile])
+
   const handleStartTracking = async () => {
     if (!tempNickname.trim()) return
 
@@ -196,17 +212,37 @@ export default function Page() {
                         />
                       ) : (
                         <DashboardLayout>
-                          <div className="grid grid-cols-12 gap-6" onClick={handleBackgroundClick}>
-                            <div className="col-span-5 space-y-6">
-                              <SkillsList />
-                            </div>
-                            <div className="col-span-4">
+                          {isMobile ? (
+                            <div className="space-y-6" onClick={handleBackgroundClick}>
                               <ActiveQuests />
+                              <SkillsList />
+                              <div>
+                                {!quickAddOpen ? (
+                                  <div
+                                    className="bg-card border border-border rounded-md px-4 py-3 text-center text-sm text-muted-foreground cursor-pointer hover:bg-muted"
+                                    onClick={() => setQuickAddOpen(true)}
+                                  >
+                                    QUICK ADD
+                                  </div>
+                                ) : (
+                                  <QuickAdd />
+                                )}
+                              </div>
+                              {/* RECENT ACTIVITY already inside QuickAdd; keeping order by rendering QuickAdd at third position */}
                             </div>
-                            <div className="col-span-3 space-y-6">
-                              <QuickAdd />
+                          ) : (
+                            <div className="grid grid-cols-12 gap-6" onClick={handleBackgroundClick}>
+                              <div className="col-span-5 space-y-6">
+                                <SkillsList />
+                              </div>
+                              <div className="col-span-4">
+                                <ActiveQuests />
+                              </div>
+                              <div className="col-span-3 space-y-6">
+                                <QuickAdd />
+                              </div>
                             </div>
-                          </div>
+                          )}
                         </DashboardLayout>
                       )}
                     </NicknameProvider>

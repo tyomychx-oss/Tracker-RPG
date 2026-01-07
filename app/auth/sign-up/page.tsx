@@ -52,10 +52,26 @@ export default function SignUpPage() {
       }
 
       if (data.user) {
-        // Store nickname in user metadata for later use
         await supabase.auth.updateUser({
           data: { nickname: nickname.trim() }
         })
+
+        try {
+          if (typeof window !== "undefined") {
+            localStorage.setItem("lastEmail", email)
+          }
+        } catch {}
+
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        })
+
+        if (signInError) {
+          setError(signInError.message)
+          setLoading(false)
+          return
+        }
 
         router.push("/")
         router.refresh()
@@ -175,4 +191,3 @@ export default function SignUpPage() {
     </div>
   )
 }
-

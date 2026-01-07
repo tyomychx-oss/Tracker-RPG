@@ -3,10 +3,9 @@
 import type React from "react"
 import { SkillsListEditable } from "@/components/skills-list-editable"
 import { SettingsPage } from "@/components/settings-page"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
-import { LayoutDashboard, Zap, BarChart3, Settings, LogOut, Menu } from "lucide-react"
+import { LayoutDashboard, Zap, BarChart3, Settings, LogOut, Menu, Bot, User, Medal, Crown } from "lucide-react"
 import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
@@ -27,6 +26,56 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { uiColor } = useUIColor()
   const { totalXP, currentLevel, maxXP } = useXP()
   const xpProgress = (totalXP / maxXP) * 100
+  const getLevelConfig = (lvl: number) => {
+    if (lvl >= 20) {
+      return {
+        title: "Legend",
+        icon: Crown,
+        containerStyles:
+          "h-10 w-10 md:h-12 md:w-12 rounded-full border-2 border-transparent bg-transparent bg-clip-border bg-gradient-to-r from-red-500 via-orange-500 to-yellow-500 shadow-[0_0_30px_rgba(239,68,68,0.9),0_0_60px_rgba(249,115,22,0.6)] animate-pulse flex items-center justify-center",
+        iconColor: "text-orange-300",
+        textStyles: "text-orange-300",
+      }
+    }
+    if (lvl >= 15) {
+      return {
+        title: "Elite",
+        icon: Zap,
+        containerStyles:
+          "h-10 w-10 md:h-12 md:w-12 rounded-full border-2 border-violet-500 bg-transparent shadow-[0_0_25px_rgba(139,92,246,0.8)] flex items-center justify-center",
+        iconColor: "text-violet-400",
+        textStyles: "text-violet-400",
+      }
+    }
+    if (lvl >= 10) {
+      return {
+        title: "Pro",
+        icon: Medal,
+        containerStyles:
+          "h-10 w-10 md:h-12 md:w-12 rounded-full border-2 border-amber-400 bg-transparent shadow-[0_0_20px_rgba(251,191,36,0.7)] flex items-center justify-center",
+        iconColor: "text-amber-400",
+        textStyles: "text-amber-400",
+      }
+    }
+    if (lvl >= 5) {
+      return {
+        title: "User",
+        icon: User,
+        containerStyles:
+          "h-10 w-10 md:h-12 md:w-12 rounded-full border-2 border-sky-400 bg-transparent shadow-[0_0_15px_rgba(56,189,248,0.6)] flex items-center justify-center",
+        iconColor: "text-sky-400",
+        textStyles: "text-sky-400",
+      }
+    }
+    return {
+      title: "NPC",
+      icon: Bot,
+      containerStyles:
+        "h-10 w-10 md:h-12 md:w-12 rounded-full border-2 border-slate-400 bg-transparent shadow-[0_0_10px_rgba(148,163,184,0.4)] flex items-center justify-center",
+      iconColor: "text-slate-400",
+      textStyles: "text-slate-400",
+    }
+  }
 
   const getInitials = (name: string) => {
     if (!name) return "U"
@@ -117,15 +166,21 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                   <SidebarContent />
                 </SheetContent>
               </Sheet>
-              
-              <Avatar className="h-10 w-10 md:h-12 md:w-12 border-2 border-primary">
-                <AvatarFallback className="bg-primary/20 text-primary font-bold">
-                  {getInitials(nickname)}
-                </AvatarFallback>
-              </Avatar>
-              <div className="hidden sm:block">
-                <h2 className="text-lg font-semibold">{nickname}</h2>
-              </div>
+              {(() => {
+                const cfg = getLevelConfig(currentLevel)
+                const Icon = cfg.icon
+                return (
+                  <>
+                    <div className={cfg.containerStyles}>
+                      <Icon className={`h-5 w-5 md:h-6 md:w-6 ${cfg.iconColor}`} />
+                    </div>
+                    <div className="hidden sm:flex flex-col">
+                      <h2 className="text-lg font-semibold">{nickname}</h2>
+                      <span className={`text-xs ${cfg.textStyles}`}>{cfg.title}</span>
+                    </div>
+                  </>
+                )
+              })()}
             </div>
 
             <div className="flex-1 max-w-md ml-4 md:ml-8">
@@ -223,7 +278,7 @@ function StatisticsView({ uiColor }: { uiColor: string }) {
   // Prepare data for daily XP progress
   const dailyXPData: Record<string, { total: number; tasks: number; daily: number; habits: number }> = {}
   activities.forEach((activity) => {
-    if (activity.xp && activity.xp > 0) {
+    if (typeof activity.xp === "number") {
       const d = new Date(activity.timestamp)
       const monthShort = d.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' })
       const day = d.getUTCDate()
@@ -239,8 +294,8 @@ function StatisticsView({ uiColor }: { uiColor: string }) {
 
   let dailyChartData = Object.entries(dailyXPData)
     .map(([date, stats]) => ({ 
-      date, 
-      XP: stats.total,
+      date,
+      XP: Math.max(0, stats.total),
       Tasks: stats.tasks,
       Daily: stats.daily,
       Habits: stats.habits
@@ -410,7 +465,7 @@ function StatisticsView({ uiColor }: { uiColor: string }) {
                       borderRadius: '6px',
                     }}
                   />
-                  <Bar dataKey="XP" radius={[4, 4, 0, 0]}>
+                  <Bar dataKey="XP" radius={[4, 4, 0, 0]} barSize={70}>
                     {barChartData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
@@ -545,7 +600,7 @@ function StatisticsView({ uiColor }: { uiColor: string }) {
                       borderRadius: '6px',
                     }}
                   />
-                  <Bar dataKey="Level" radius={[4, 4, 0, 0]}>
+                  <Bar dataKey="Level" radius={[4, 4, 0, 0]} barSize={70}>
                     {levelChartData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -16,10 +16,18 @@ export default function SignInPage() {
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
+  const [emailSuggestion, setEmailSuggestion] = useState<string | null>(null)
+  const [showEmailSuggestion, setShowEmailSuggestion] = useState(false)
+
+  useEffect(() => {
+    try {
+      const last = typeof window !== "undefined" ? localStorage.getItem("lastEmail") : null
+      if (last) setEmailSuggestion(last)
+    } catch {}
+  }, [])
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault()
-    setError("")
     setLoading(true)
 
     try {
@@ -30,10 +38,21 @@ export default function SignInPage() {
       })
 
       if (error) {
-        setError(error.message)
+        const msg = error.message?.toLowerCase() || ""
+        if (msg.includes("invalid") || msg.includes("credentials")) {
+          setError("Такого акаунта не знайдено")
+        } else {
+          setError(error.message)
+        }
         setLoading(false)
         return
       }
+
+      try {
+        if (typeof window !== "undefined") {
+          localStorage.setItem("lastEmail", email)
+        }
+      } catch {}
 
       router.push("/")
       router.refresh()
@@ -91,11 +110,29 @@ export default function SignInPage() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                onFocus={() => {
+                  setError("")
+                  setShowEmailSuggestion(true)
+                }}
                 className="bg-input"
                 placeholder="your@email.com"
                 required
                 disabled={loading}
               />
+              {showEmailSuggestion && emailSuggestion && (
+                <div className="mt-2 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmail(emailSuggestion)
+                      setShowEmailSuggestion(false)
+                    }}
+                    className="px-2 py-1 rounded border border-muted-foreground/20 text-muted-foreground hover:bg-muted/20"
+                  >
+                    Підставити: {emailSuggestion}
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="space-y-2">

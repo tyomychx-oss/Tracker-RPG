@@ -26,15 +26,19 @@ const INTERFACE_COLORS = [
 export function SettingsPage() {
   const { nickname, setNickname } = useNickname()
   const { uiColor, setUIColor } = useUIColor()
-  const { resetXP } = useXP()
+  const { resetXP, addXP, removeXP } = useXP()
   const { skillXPs, removeSkillXP } = useSkillXP()
   const { skills } = useSkills()
-  const { activities, resetActivities } = useRecentActivity()
+  const { activities, addActivity, resetActivities } = useRecentActivity()
   const { resetQuests } = useQuests()
   const [tempNickname, setTempNickname] = useState(nickname)
   const [showNicknameSaved, setShowNicknameSaved] = useState(false)
   const [showColorSaved, setShowColorSaved] = useState(false)
   const [showRemoveProgressDialog, setShowRemoveProgressDialog] = useState(false)
+  const [showAddXP, setShowAddXP] = useState(false)
+  const [showRemoveXP, setShowRemoveXP] = useState(false)
+  const [addXPValue, setAddXPValue] = useState("")
+  const [removeXPValue, setRemoveXPValue] = useState("")
 
   const handleSaveNickname = () => {
     setNickname(tempNickname)
@@ -141,14 +145,91 @@ export function SettingsPage() {
             ACCOUNT
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <Button
-            onClick={() => setShowRemoveProgressDialog(true)}
-            variant="outline"
-            className="w-full border-red-500 text-red-500 hover:bg-red-500 hover:text-white bg-transparent"
-          >
-            Remove progress
-          </Button>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <Button
+              onClick={() => {
+                setShowAddXP(true)
+                setShowRemoveXP(false)
+              }}
+              className="w-full bg-green-500/10 hover:bg-green-500/20 text-green-600"
+            >
+              Add XP
+            </Button>
+            <Button
+              onClick={() => {
+                setShowRemoveXP(true)
+                setShowAddXP(false)
+              }}
+              className="w-full bg-amber-500/10 hover:bg-amber-500/20 text-amber-600"
+            >
+              Remove XP
+            </Button>
+          </div>
+          <div>
+            <Button
+              onClick={() => setShowRemoveProgressDialog(true)}
+              className="w-full bg-red-500/10 hover:bg-red-500/20 text-red-600"
+            >
+              Remove ALL progress
+            </Button>
+          </div>
+
+          {showAddXP && (
+            <div className="space-y-2">
+              <Label htmlFor="add-xp" className="text-foreground">Amount to add</Label>
+              <Input
+                id="add-xp"
+                type="number"
+                min={0}
+                value={addXPValue}
+                onChange={(e) => setAddXPValue(e.target.value)}
+                className="bg-input font-mono"
+                placeholder="Enter XP"
+              />
+              <Button
+                onClick={() => {
+                  const val = Math.max(0, Number(addXPValue || "0"))
+                  if (val > 0) {
+                    addXP(val)
+                    addActivity(`Account: Added XP`, val)
+                    setAddXPValue("")
+                  }
+                }}
+                className="bg-green-600 hover:bg-green-700 text-white"
+              >
+                Confirm add
+              </Button>
+            </div>
+          )}
+
+          {showRemoveXP && (
+            <div className="space-y-2">
+              <Label htmlFor="remove-xp" className="text-foreground">Amount to remove</Label>
+              <Input
+                id="remove-xp"
+                type="number"
+                min={0}
+                value={removeXPValue}
+                onChange={(e) => setRemoveXPValue(e.target.value)}
+                className="bg-input font-mono"
+                placeholder="Enter XP"
+              />
+              <Button
+                onClick={() => {
+                  const val = Math.max(0, Number(removeXPValue || "0"))
+                  if (val > 0) {
+                    removeXP(val)
+                    addActivity(`Account: Removed XP`, -val)
+                    setRemoveXPValue("")
+                  }
+                }}
+                className="bg-amber-500 hover:bg-amber-600 text-white"
+              >
+                Confirm remove
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 

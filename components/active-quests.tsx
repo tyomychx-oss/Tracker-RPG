@@ -149,7 +149,7 @@ export function ActiveQuests() {
         // Restore skill XP to previous amount
         const currentSkillXP = areaXPs[skillName] || 0
         const xpToRemove = currentSkillXP - snapshot.previousSkillXP
-        if (xpToRemove > 0) {
+        if (xpToRemove > 0 && skillName) {
           removeAreaXP(skillName, xpToRemove)
         }
         
@@ -162,7 +162,9 @@ export function ActiveQuests() {
       } else {
         // Fallback
         removeXP(xpAmount)
-        removeAreaXP(skillName, xpAmount)
+        if (skillName) {
+          removeAreaXP(skillName, xpAmount)
+        }
       }
       
       addActivity(`Uncompleted: ${questTitle}`, -xpAmount, category)
@@ -181,7 +183,9 @@ export function ActiveQuests() {
 
       // Add XP
       addXP(xpAmount)
-      addAreaXP(skillName, xpAmount)
+      if (skillName) {
+        addAreaXP(skillName, xpAmount)
+      }
       addActivity(`Completed: ${questTitle}`, xpAmount, category) // Fixed duplicate calls here
 
       if (category === "habits") {
@@ -217,7 +221,9 @@ export function ActiveQuests() {
     skillName: string,
   ) => {
     removeXP(xpAmount)
-    removeAreaXP(skillName, xpAmount)
+    if (skillName) {
+      removeAreaXP(skillName, xpAmount)
+    }
     updateQuest(category, questId, { completed: false, archivedAt: null })
   }
 
@@ -290,19 +296,21 @@ export function ActiveQuests() {
                 <h4 className="font-medium text-foreground">{quest.title}</h4>
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground font-mono whitespace-nowrap">+{quest.xp} XP</span>
-                  <Badge
-                    variant="outline"
-                    className="text-xs border"
-                    style={{
-                      backgroundColor: `${skillColor}20`,
-                      color: skillColor,
-                      borderColor: skillColor,
-                      fontSize: "0.65rem",
-                      padding: "0.125rem 0.375rem",
-                    }}
-                  >
-                    {quest.skill}
-                  </Badge>
+                  {quest.skill && (
+                    <Badge
+                      variant="outline"
+                      className="text-xs border"
+                      style={{
+                        backgroundColor: `${skillColor}20`,
+                        color: skillColor,
+                        borderColor: skillColor,
+                        fontSize: "0.65rem",
+                        padding: "0.125rem 0.375rem",
+                      }}
+                    >
+                      {quest.skill}
+                    </Badge>
+                  )}
                   {category === "habits" && (
                     <span className="text-xs flex items-center gap-1">
                       <span>🔥</span>
@@ -442,7 +450,7 @@ export function ActiveQuests() {
       </Card>
 
       <Dialog open={!!editingQuest} onOpenChange={(open) => !open && setEditingQuest(null)}>
-        <DialogContent className="bg-card border-border">
+        <DialogContent className="bg-card border-border" onOpenAutoFocus={(e) => e.preventDefault()}>
           <DialogHeader>
             <DialogTitle className="text-primary">EDIT QUEST</DialogTitle>
           </DialogHeader>

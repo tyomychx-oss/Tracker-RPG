@@ -24,7 +24,7 @@ export function QuickAdd() {
   const { areas: availableAreas } = useAreas()
 
   const handleAddTask = () => {
-    if (!taskName.trim() || !taskSkill) return
+    if (!taskName.trim()) return
 
     const base = {
       id: Date.now(),
@@ -90,7 +90,7 @@ export function QuickAdd() {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label htmlFor="task-type" className="text-foreground">
                 Type
@@ -108,44 +108,24 @@ export function QuickAdd() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="task-skill" className="text-foreground">
-                Area
-              </Label>
-              <Select value={taskSkill} onValueChange={setTaskSkill}>
-                <SelectTrigger id="task-skill" className="bg-input">
-                  <SelectValue placeholder="Select area" />
-                </SelectTrigger>
-                <SelectContent>
-                  {(availableAreas || []).length === 0 ? (
-                    <div className="px-2 py-1 text-sm text-muted-foreground">
-                      Create an area first in the Areas tab
-                    </div>
-                  ) : (
-                    availableAreas.map((skill) => (
-                      <SelectItem key={skill} value={skill}>
-                        {skill}
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="task-xp" className="text-foreground">
-              XP Reward
+            <Label htmlFor="task-skill" className="text-foreground">
+              Area
             </Label>
-            <Input
-              id="task-xp"
-              type="number"
-              placeholder="25"
-              value={taskXP}
-              onChange={(e) => setTaskXP(e.target.value)}
-              className="bg-input font-mono"
-            />
+            <Select value={taskSkill} onValueChange={setTaskSkill}>
+              <SelectTrigger id="task-skill" className="bg-input">
+                <SelectValue placeholder="No area" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">No area</SelectItem>
+                {(availableAreas || []).map((skill) => (
+                  <SelectItem key={skill} value={skill}>
+                    {skill}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-
+          
           <div className="space-y-2">
             <Label htmlFor="task-priority" className="text-foreground">
               Priority
@@ -162,6 +142,22 @@ export function QuickAdd() {
               </SelectContent>
             </Select>
           </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="task-xp" className="text-foreground">
+              XP Reward
+            </Label>
+            <Input
+              id="task-xp"
+              type="number"
+              placeholder="25"
+              value={taskXP}
+              onChange={(e) => setTaskXP(e.target.value)}
+              className="bg-input font-mono"
+            />
+          </div>
+
 
           {taskType === "dailies" && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

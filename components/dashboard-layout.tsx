@@ -5,13 +5,14 @@ import { SkillsListEditable } from "@/components/skills-list-editable"
 import { SettingsPage } from "@/components/settings-page"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
-import { LayoutDashboard, Zap, BarChart3, Settings, LogOut, Menu, Bot, User, Medal, Crown } from "lucide-react"
+import { LayoutDashboard, Zap, BarChart3, Settings, LogOut, Menu, Bot, User, Medal, Crown, BookOpen } from "lucide-react"
 import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { useNickname, useUIColor, useXP, useSkills, useSkillXP, useSkillColors, useRecentActivity, useQuests } from "@/components/providers"
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, LineChart, Line, ReferenceArea } from "recharts"
 import { DatabaseSync } from "@/components/database-sync"
+import { SystemGuide } from "@/components/system-guide"
 
 const navigation = [
   { name: "Main", icon: LayoutDashboard },
@@ -22,6 +23,7 @@ const navigation = [
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [activeNav, setActiveNav] = useState("Main")
+  const [showSystemGuide, setShowSystemGuide] = useState(false)
   const { nickname } = useNickname()
   const { uiColor } = useUIColor()
   const { totalXP, currentLevel, maxXP } = useXP()
@@ -127,6 +129,14 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       <div className="p-4 border-t border-sidebar-border">
         <Button
           variant="ghost"
+          className="w-full justify-start text-foreground hover:bg-muted transition-colors mb-2"
+          onClick={() => setShowSystemGuide(true)}
+        >
+          <BookOpen className="mr-3 h-4 w-4" />
+          System Manual
+        </Button>
+        <Button
+          variant="ghost"
           className="w-full justify-start text-foreground hover:bg-muted transition-colors"
           onClick={async () => {
             const { createClient } = await import("@/utils/supabase/client")
@@ -141,10 +151,11 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       </div>
     </div>
   )
-
+  
   return (
     <div className="min-h-screen bg-background flex">
       <DatabaseSync />
+      <SystemGuide open={showSystemGuide} onOpenChange={setShowSystemGuide} />
       {/* Desktop Sidebar */}
       <aside className="w-64 bg-sidebar border-r border-sidebar-border hidden md:flex flex-col">
         <SidebarContent />

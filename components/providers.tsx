@@ -19,11 +19,13 @@ export interface AreaXPContextType {
   areaXPs: Record<string, number>
   addAreaXP: (area: string, amount: number) => void
   removeAreaXP: (area: string, amount: number) => void
+  renameAreaXPKey: (oldName: string, newName: string) => void
 }
 
 export interface AreaColorsContextType {
   areaColors: Record<string, string>
   setAreaColor: (area: string, color: string) => void
+  renameAreaColorKey: (oldName: string, newName: string) => void
 }
 
 export interface AreaFilterContextType {
@@ -114,6 +116,7 @@ export interface AreasContextType {
   archivedAreas: string[]
   archiveArea: (areaName: string) => void
   unarchiveArea: (areaName: string) => void
+  renameArea: (oldName: string, newName: string, newColor?: string) => void
 }
 
 // --- Contexts ---
@@ -455,7 +458,17 @@ export function AreaXPProvider({ children }: { children: ReactNode }) {
     }))
   }
 
-  return <AreaXPContext.Provider value={{ areaXPs, addAreaXP, removeAreaXP }}>{children}</AreaXPContext.Provider>
+  const renameAreaXPKey = (oldName: string, newName: string) => {
+    setAreaXPs((prev) => {
+      if (!(oldName in prev)) return prev
+      const next = { ...prev }
+      next[newName] = prev[oldName]
+      delete next[oldName]
+      return next
+    })
+  }
+
+  return <AreaXPContext.Provider value={{ areaXPs, addAreaXP, removeAreaXP, renameAreaXPKey }}>{children}</AreaXPContext.Provider>
 }
 
 export function AreaColorsProvider({ children }: { children: ReactNode }) {
@@ -494,7 +507,17 @@ export function AreaColorsProvider({ children }: { children: ReactNode }) {
     setAreaColors((prev) => ({ ...prev, [area]: color }))
   }
 
-  return <AreaColorsContext.Provider value={{ areaColors, setAreaColor }}>{children}</AreaColorsContext.Provider>
+  const renameAreaColorKey = (oldName: string, newName: string) => {
+    setAreaColors((prev) => {
+      if (!(oldName in prev)) return prev
+      const next = { ...prev }
+      next[newName] = prev[oldName]
+      delete next[oldName]
+      return next
+    })
+  }
+
+  return <AreaColorsContext.Provider value={{ areaColors, setAreaColor, renameAreaColorKey }}>{children}</AreaColorsContext.Provider>
 }
 
 export function AreaFilterProvider({ children }: { children: ReactNode }) {
@@ -678,8 +701,10 @@ export function AreasProvider({ children }: { children: ReactNode }) {
   const [isLoaded, setIsLoaded] = useState(false)
   const { removeSkillXP, skillXPs } = useSkillXP()
   const { skillColors } = useSkillColors()
-  const { deleteQuestsBySkill } = useQuests()
+  const { quests, deleteQuestsBySkill, updateQuest } = useQuests()
   const { removeXP } = useXP()
+  const { renameAreaXPKey } = useAreaXP()
+  const { renameAreaColorKey, setAreaColor } = useAreaColors()
 
   useEffect(() => {
     const storedProfile = localStorage.getItem("currentUserProfile")
@@ -765,10 +790,55 @@ export function AreasProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  const renameArea = (oldName: string, newName: string, newColor?: string) => {
+    const nextName = newName.trim()
+    if (!nextName || nextName === oldName) return
+    setAreas((prev) => prev.map((s) => (s === oldName ? nextName : s)))
+    setArchivedAreas((prev) => prev.map((s) => (s === oldName ? nextName : s)))
+    const storedProfile = localStorage.getItem("currentUserProfile")
+    if (storedProfile) {
+      const profile: UserProfile & { archivedAreas?: string[] } = JSON.parse(storedProfile)
+      if (profile.archivedAreas && profile.archivedAreas.length) {
+        profile.archivedAreas = profile.archivedAreas.map((s) => (s === oldName ? nextName : s))
+      }
+      if (profile.skillColors) {
+        const existingColor = profile.skillColors[oldName]
+        const finalColor = newColor ?? existingColor
+        if (finalColor !== undefined) profile.skillColors[nextName] = finalColor
+        delete profile.skillColors[oldName]
+      }
+      if (profile.skillXPs) {
+        const existingXP = profile.skillXPs[oldName]
+        if (existingXP !== undefined) profile.skillXPs[nextName] = existingXP
+        delete profile.skillXPs[oldName]
+      }
+      if (profile.quests) {
+        profile.quests.plans = profile.quests.plans.map((q) => (q.skill === oldName ? { ...q, skill: nextName } : q))
+        profile.quests.dailies = profile.quests.dailies.map((q) => (q.skill === oldName ? { ...q, skill: nextName } : q))
+        profile.quests.habits = profile.quests.habits.map((q) => (q.skill === oldName ? { ...q, skill: nextName } : q))
+      }
+      localStorage.setItem("currentUserProfile", JSON.stringify(profile))
+      localStorage.setItem(`userProfile_${profile.nickname}`, JSON.stringify(profile))
+    }
+
+    renameAreaXPKey(oldName, nextName)
+    renameAreaColorKey(oldName, nextName)
+    if (newColor) {
+      setAreaColor(nextName, newColor)
+    }
+    ;(["plans", "dailies", "habits"] as const).forEach((category) => {
+      quests[category].forEach((q) => {
+        if (q.skill === oldName) {
+          updateQuest(category, q.id, { skill: nextName })
+        }
+      })
+    })
+  }
+
   const hasAreas = areas.length > 0
   return (
     <AreasContext.Provider
-      value={{ areas, addArea, removeArea, hasAreas, archivedAreas, archiveArea, unarchiveArea }}
+      value={{ areas, addArea, removeArea, hasAreas, archivedAreas, archiveArea, unarchiveArea, renameArea }}
     >
       {children}
     </AreasContext.Provider>

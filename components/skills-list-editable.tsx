@@ -31,7 +31,7 @@ export function SkillsListEditable() {
   const { selectedAreas, toggleArea } = useAreaFilter()
   const { uiColor } = useUIColor()
   const { areaXPs, addAreaXP } = useAreaXP()
-  const { areas: areasList, addArea, removeArea, archivedAreas, archiveArea, unarchiveArea } = useAreas()
+  const { areas: areasList, addArea, removeArea, archivedAreas, archiveArea, unarchiveArea, renameArea } = useAreas()
   const [editingSkill, setEditingSkill] = useState<string | null>(null)
   const [editingSkillName, setEditingSkillName] = useState("")
   const [selectedColor, setSelectedColor] = useState<string>("")
@@ -66,13 +66,21 @@ export function SkillsListEditable() {
   }
 
   const handleSave = () => {
-    if (editingSkill) {
-      setAreaColor(editingSkill, selectedColor)
+    if (!editingSkill) return
+    const nextName = editingSkillName.trim()
+    if (nextName && nextName !== editingSkill) {
+      renameArea(editingSkill, nextName, selectedColor)
       setShowSavedMessage(true)
       setTimeout(() => {
         setShowSavedMessage(false)
       }, 2000)
+      return
     }
+    setAreaColor(editingSkill, selectedColor)
+    setShowSavedMessage(true)
+    setTimeout(() => {
+      setShowSavedMessage(false)
+    }, 2000)
   }
 
   const handleClose = () => {
@@ -297,7 +305,7 @@ export function SkillsListEditable() {
 
       {/* Edit Area Dialog */}
       <Dialog open={!!editingSkill} onOpenChange={(open) => !open && handleClose()}>
-        <DialogContent className="bg-card border-border">
+        <DialogContent className="bg-card border-border" onOpenAutoFocus={(e) => e.preventDefault()}>
           <DialogHeader>
             <DialogTitle className="text-primary">EDIT AREA</DialogTitle>
           </DialogHeader>
@@ -309,6 +317,7 @@ export function SkillsListEditable() {
                 onChange={(e) => setEditingSkillName(e.target.value)}
                 className="bg-secondary border-border text-foreground"
                 placeholder="Area name"
+                autoFocus={false}
               />
             </div>
 
@@ -329,7 +338,7 @@ export function SkillsListEditable() {
             </div>
           </div>
           <DialogFooter className="flex items-center justify-between">
-            <div className="flex-1">{showSavedMessage && <p className="text-sm text-green-500">Changes saved</p>}</div>
+            <div className="flex-1">{showSavedMessage && <p className="text-xs text-green-500">Changes saved</p>}</div>
             <Button onClick={handleSave} className="bg-green-600 hover:bg-green-700 text-white">
               Save changes
             </Button>

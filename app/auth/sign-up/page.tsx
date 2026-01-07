@@ -53,7 +53,7 @@ export default function SignUpPage() {
         return
       }
 
-      // Успішна реєстрація
+      // Success message (English)
       setSuccessMsg("Verify your email!")
       setLoading(false)
     } catch (err) {
@@ -71,14 +71,12 @@ export default function SignUpPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Блок помилки */}
           {error && (
             <div className="p-3 bg-red-500/10 border border-red-500/50 rounded-md text-red-500 text-sm">
               {error}
             </div>
           )}
 
-          {/* Блок успіху */}
           {successMsg && (
             <div className="p-3 bg-green-500/10 border border-green-500/50 rounded-md text-green-500 text-sm">
               {successMsg}

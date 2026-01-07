@@ -41,11 +41,9 @@ export default function SignInPage() {
       if (error) {
         const msg = error.message?.toLowerCase() || ""
         
-        // Перевірка на непідтверджену пошту
         if (msg.includes("email not confirmed")) {
            setError("Verify your email!")
         } 
-        // Перевірка на неправильні дані (акаунта не існує або пароль невірний)
         else if (msg.includes("invalid login credentials")) {
            setError("Account doesn't exist or wrong password!")
         } 
@@ -105,6 +103,7 @@ export default function SignInPage() {
                 required
                 disabled={loading}
               />
+              {/* English text here now */}
               {showEmailSuggestion && emailSuggestion && (
                 <div className="mt-2 text-xs">
                   <button
@@ -115,7 +114,7 @@ export default function SignInPage() {
                     }}
                     className="px-2 py-1 rounded border border-muted-foreground/20 text-muted-foreground hover:bg-muted/20"
                   >
-                    Підставити: {emailSuggestion}
+                    Use: {emailSuggestion}
                   </button>
                 </div>
               )}

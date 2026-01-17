@@ -2,9 +2,9 @@
 
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { ShopReward, useShop } from "@/components/shop-provider"
+import { useShop, ShopReward } from "@/components/shop-provider"
 import { useUIColor, useSparks } from "@/components/providers"
-import { ShoppingCart, Trash2, Edit } from "lucide-react"
+import { Trash2, Edit } from "lucide-react"
 import { useState } from "react"
 import { toast } from "sonner"
 import { ShopManageDialog } from "@/components/shop-manage-dialog"
@@ -17,17 +17,22 @@ export function ShopRewardCard({ reward }: { reward: ShopReward }) {
 
     const canAfford = sparks >= reward.cost
 
+    // Логіка кольорів рамки та фону залежно від ціни (Рідкість)
+    const getRarityStyles = (cost: number) => {
+        if (cost >= 200) return "border-yellow-500 shadow-[0_0_10px_rgba(234,179,8,0.15)] bg-gradient-to-r from-yellow-500/10 to-transparent"
+        if (cost >= 150) return "border-red-500 bg-gradient-to-r from-red-500/10 to-transparent"
+        if (cost >= 100) return "border-purple-500 bg-gradient-to-r from-purple-500/10 to-transparent"
+        if (cost >= 50) return "border-blue-500 bg-gradient-to-r from-blue-500/10 to-transparent"
+        return "border-border bg-card" // 0-49 (Звичайний)
+    }
+
     const handleBuy = async () => {
         if (!canAfford) return
         setIsBuying(true)
-
         const success = await buyReward(reward)
-
         setIsBuying(false)
         if (success) {
-            toast.success(`Purchased ${reward.title}!`, {
-                description: `Spent ${reward.cost} sparks.`
-            })
+            toast.success(`Purchased ${reward.title}!`)
         } else {
             toast.error("Not enough sparks!")
         }
@@ -40,92 +45,76 @@ export function ShopRewardCard({ reward }: { reward: ShopReward }) {
         }
     }
 
-    // Rarity-based border styling
-    const getRarityStyle = (cost: number) => {
-        if (cost >= 200) {
-            return {
-                borderClass: "border-yellow-500",
-                glowClass: "shadow-[0_0_15px_rgba(234,179,8,0.4)]"
-            }
-        } else if (cost >= 150) {
-            return {
-                borderClass: "border-red-500",
-                glowClass: ""
-            }
-        } else if (cost >= 100) {
-            return {
-                borderClass: "border-purple-500",
-                glowClass: ""
-            }
-        } else if (cost >= 50) {
-            return {
-                borderClass: "border-blue-500",
-                glowClass: ""
-            }
-        } else {
-            return {
-                borderClass: "border-border",
-                glowClass: ""
-            }
-        }
-    }
-
-    const rarityStyle = getRarityStyle(reward.cost)
-
     return (
-        <Card className={`bg-card overflow-hidden hover:border-primary/50 transition-all group relative ${rarityStyle.borderClass} ${rarityStyle.glowClass}`}>
-            <CardContent className="p-3">
-                <div className="flex flex-row justify-between items-center gap-2">
-                    {/* Left Side: Icon + Title + Description */}
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                        <div className="text-4xl shrink-0">{reward.icon || "🎁"}</div>
-                        <div className="flex-1 min-w-0">
-                            <h3 className="font-bold text-base text-foreground leading-tight truncate">
-                                {reward.title}
-                            </h3>
-                            {reward.description && (
-                                <p className="text-xs text-muted-foreground line-clamp-1">
-                                    {reward.description}
-                                </p>
-                            )}
+        <Card className={`transition-all hover:scale-[1.01] overflow-hidden ${getRarityStyles(reward.cost)}`}>
+            {/* Використовуємо flex-row для горизонтального вигляду */}
+            <CardContent className="p-3 sm:p-4 flex items-center justify-between gap-4">
+
+                {/* ЛІВА ЧАСТИНА: Іконка + Інформація */}
+                <div className="flex items-center gap-4 flex-1 min-w-0">
+                    {/* Велика іконка */}
+                    <div className="flex-shrink-0 h-14 w-14 rounded-lg bg-background/40 border border-white/5 flex items-center justify-center text-3xl shadow-inner">
+                        {reward.icon || "🎁"}
+                    </div>
+
+                    {/* Текст */}
+                    <div className="flex flex-col min-w-0">
+                        <h3 className="font-bold text-base sm:text-lg leading-tight truncate pr-2 text-foreground">
+                            {reward.title}
+                        </h3>
+                        {reward.description && (
+                            <p className="text-xs text-muted-foreground truncate hidden sm:block mt-1">
+                                {reward.description}
+                            </p>
+                        )}
+                    </div>
+                </div>
+
+                {/* ПРАВА ЧАСТИНА: Ціна + Кнопки */}
+                <div className="flex items-center gap-3 sm:gap-6 flex-shrink-0">
+
+                    {/* Ціна (Великі цифри) */}
+                    <div className="text-right">
+                        <div className={`font-mono font-black text-xl sm:text-2xl leading-none ${canAfford ? 'text-foreground' : 'text-muted-foreground opacity-50'}`}>
+                            {reward.cost} <span className="text-yellow-500 text-lg">⚡</span>
                         </div>
                     </div>
 
-                    {/* Right Side: Price + Buy Button (with actions below) */}
-                    <div className="flex items-center gap-2 shrink-0">
-                        {/* Price */}
-                        <div className="font-mono font-black text-xl text-orange-500 flex items-center gap-0.5">
-                            {reward.cost} ⚡
-                        </div>
+                    {/* Кнопка Купити */}
+                    <div className="flex items-center gap-2">
+                        <Button
+                            size="sm"
+                            onClick={handleBuy}
+                            disabled={!canAfford || isBuying}
+                            className="font-bold h-10 px-4 sm:px-6 shadow-md transition-transform active:scale-95"
+                            style={{ backgroundColor: canAfford ? uiColor : undefined }}
+                        >
+                            {isBuying ? "..." : "BUY"}
+                        </Button>
 
-                        {/* Buy Button with Actions Below */}
-                        <div className="relative">
-                            {/* Buy Button - Centered */}
-                            <Button
-                                size="sm"
-                                className="font-bold transition-all active:scale-95 h-9 text-sm px-4"
-                                style={{ backgroundColor: canAfford ? uiColor : undefined }}
-                                disabled={!canAfford || isBuying}
-                                onClick={handleBuy}
-                            >
-                                {isBuying ? "..." : <ShoppingCart className="h-4 w-4 mr-1" />}
-                                BUY
-                            </Button>
-
-                            {/* Edit/Delete Actions - Absolutely positioned below */}
-                            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <ShopManageDialog trigger={
-                                    <Button variant="ghost" size="icon" className="h-6 w-6">
+                        {/* Кнопки редагування (менш помітні) */}
+                        <div className="flex flex-col gap-1 ml-1 border-l border-border/50 pl-2">
+                            <ShopManageDialog
+                                trigger={
+                                    <Button variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground/50 hover:text-foreground">
                                         <Edit className="h-3 w-3" />
                                     </Button>
-                                } data={reward} isEditing />
-                                <Button variant="ghost" size="icon" className="h-6 w-6 hover:text-destructive" onClick={handleDelete}>
-                                    <Trash2 className="h-3 w-3" />
-                                </Button>
-                            </div>
+                                }
+                                data={reward}
+                                isEditing
+                            />
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-5 w-5 text-muted-foreground/50 hover:text-destructive"
+                                onClick={handleDelete}
+                            >
+                                <Trash2 className="h-3 w-3" />
+                            </Button>
                         </div>
                     </div>
                 </div>
+
             </CardContent>
         </Card>
     )

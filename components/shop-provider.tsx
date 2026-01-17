@@ -7,13 +7,13 @@ import { useSparks } from "@/components/providers"
 export interface ShopReward {
     id: string
     title: string
-    description?: string
+    description?: string | null
     cost: number
     category: string
     is_on_market: boolean
     is_in_wheel: boolean
     drop_chance: number
-    icon: string
+    icon: string | null
     created_at?: string
 }
 

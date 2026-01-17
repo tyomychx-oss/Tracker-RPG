@@ -1,17 +1,17 @@
 "use client"
 
+import { Suspense } from "react"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { useShop } from "@/components/shop-provider"
 import { useSparks } from "@/components/providers"
 import { ShopGacha } from "@/components/shop-gacha"
-import { ShopRewardCard } from "@/components/shop-reward-card"
+import { ShopRewardCard } from "@/components/shop-reward-card" // Переконайся, що шлях правильний
 import { ShopHistory } from "@/components/shop-history"
 import { ShopManageDialog } from "@/components/shop-manage-dialog"
-import { Zap, Store } from "lucide-react"
+import { Zap, Store, Loader2 } from "lucide-react"
 
-// Import RarityList from shop-gacha file
+// RarityList залишаємо тут, він ок
 function RarityList({ rewards }: { rewards: any[] }) {
-    // Sort by drop_chance ascending (rarest first) and take top 8 (to avoid scrollbar)
     const sortedRewards = [...rewards]
         .sort((a, b) => a.drop_chance - b.drop_chance)
         .slice(0, 8)
@@ -23,34 +23,19 @@ function RarityList({ rewards }: { rewards: any[] }) {
 
     const RaritySection = ({ title, items, color, glowColor }: any) => {
         if (items.length === 0) return null
-
         return (
             <div className="mb-3">
-                <h3
-                    className="text-xs font-bold mb-1.5 uppercase tracking-wider"
-                    style={{
-                        color: color,
-                        textShadow: `0 0 8px ${glowColor}, 0 0 15px ${glowColor}`
-                    }}
-                >
+                <h3 className="text-xs font-bold mb-1.5 uppercase tracking-wider" style={{ color: color, textShadow: `0 0 8px ${glowColor}, 0 0 15px ${glowColor}` }}>
                     {title}
                 </h3>
                 <div className="space-y-0.5">
                     {items.map((reward: any) => (
-                        <div
-                            key={reward.id}
-                            className="flex items-center justify-between px-2 py-1 rounded bg-background/30"
-                        >
+                        <div key={reward.id} className="flex items-center justify-between px-2 py-1 rounded bg-background/30">
                             <div className="flex items-center gap-1.5 flex-1 min-w-0">
                                 <span className="text-sm">{reward.icon || "🎁"}</span>
                                 <span className="truncate text-sm" style={{ color }}>{reward.title}</span>
                             </div>
-                            <span
-                                className="font-mono font-bold ml-2 shrink-0 text-xs"
-                                style={{ color }}
-                            >
-                                {reward.drop_chance}%
-                            </span>
+                            <span className="font-mono font-bold ml-2 shrink-0 text-xs" style={{ color }}>{reward.drop_chance}%</span>
                         </div>
                     ))}
                 </div>
@@ -60,44 +45,22 @@ function RarityList({ rewards }: { rewards: any[] }) {
 
     return (
         <>
-            <h2 className="text-sm font-bold mb-3 text-foreground border-b border-border pb-2">
-                Rarity List
-            </h2>
+            <h2 className="text-sm font-bold mb-3 text-foreground border-b border-border pb-2">Rarity List</h2>
             <div className="space-y-2">
-                <RaritySection
-                    title="Legendary"
-                    items={legendary}
-                    color="#FFD700"
-                    glowColor="#FFD700"
-                />
-                <RaritySection
-                    title="Epic"
-                    items={epic}
-                    color="#DC143C"
-                    glowColor="#DC143C"
-                />
-                <RaritySection
-                    title="Rare"
-                    items={rare}
-                    color="#9370DB"
-                    glowColor="#9370DB"
-                />
-                <RaritySection
-                    title="Common"
-                    items={common}
-                    color="#C0C0C0"
-                    glowColor="#C0C0C0"
-                />
+                <RaritySection title="Legendary" items={legendary} color="#FFD700" glowColor="#FFD700" />
+                <RaritySection title="Epic" items={epic} color="#DC143C" glowColor="#DC143C" />
+                <RaritySection title="Rare" items={rare} color="#9370DB" glowColor="#9370DB" />
+                <RaritySection title="Common" items={common} color="#C0C0C0" glowColor="#C0C0C0" />
             </div>
         </>
     )
 }
 
-export default function ShopPage() {
+function ShopContent() {
     const { rewards, isLoading } = useShop()
     const { sparks } = useSparks()
 
-    // Filter to show only rewards that are on the market, sorted by cost (expensive to cheap)
+    // Сортуємо: спочатку дорогі
     const marketRewards = rewards
         .filter(r => r.is_on_market)
         .sort((a, b) => b.cost - a.cost)
@@ -106,7 +69,7 @@ export default function ShopPage() {
         <DashboardLayout>
             <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
 
-                {/* Header Section */}
+                {/* Header */}
                 <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-6">
                     <div>
                         <h1 className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-3">
@@ -150,9 +113,9 @@ export default function ShopPage() {
                         </div>
 
                         {isLoading ? (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="space-y-4">
                                 {[1, 2, 3, 4].map(i => (
-                                    <div key={i} className="h-[130px] bg-card/50 animate-pulse rounded-xl" />
+                                    <div key={i} className="h-20 bg-card/50 animate-pulse rounded-xl" />
                                 ))}
                             </div>
                         ) : marketRewards.length === 0 ? (
@@ -160,7 +123,8 @@ export default function ShopPage() {
                                 <p className="text-muted-foreground">No rewards on the market. Create your first one!</p>
                             </div>
                         ) : (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            // ТУТ ЗМІНИ: grid-cols-1 замість 2, щоб картки були на всю ширину
+                            <div className="grid grid-cols-1 gap-3">
                                 {marketRewards.map(reward => (
                                     <ShopRewardCard key={reward.id} reward={reward} />
                                 ))}
@@ -178,5 +142,13 @@ export default function ShopPage() {
 
             </div>
         </DashboardLayout>
+    )
+}
+
+export default function ShopPage() {
+    return (
+        <Suspense fallback={<div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin" /></div>}>
+            <ShopContent />
+        </Suspense>
     )
 }

@@ -5,24 +5,63 @@ import { SkillsListEditable } from "@/components/skills-list-editable"
 import { SettingsPage } from "@/components/settings-page"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
-import { LayoutDashboard, Zap, BarChart3, Settings, LogOut, Menu, Bot, User, Medal, Crown, BookOpen } from "lucide-react"
+import { LayoutDashboard, Zap, BarChart3, Settings, LogOut, Menu, Bot, User, Medal, Crown, BookOpen, Store } from "lucide-react"
 import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
-import { useNickname, useUIColor, useXP, useSkills, useSkillXP, useSkillColors, useRecentActivity, useQuests } from "@/components/providers"
+import { useNickname, useUIColor, useXP, useSkills, useSkillXP, useSkillColors, useRecentActivity, useQuests, useSparks } from "@/components/providers"
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, LineChart, Line, ReferenceArea } from "recharts"
 import { DatabaseSync } from "@/components/database-sync"
 import { SystemGuide } from "@/components/system-guide"
+import { useRouter, usePathname, useSearchParams } from "next/navigation"
+import { useEffect } from "react"
 
 const navigation = [
   { name: "Main", icon: LayoutDashboard },
   { name: "Areas", icon: Zap },
+  { name: "Shop", icon: Store },
   { name: "Statistics", icon: BarChart3 },
   { name: "Settings", icon: Settings },
 ]
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
   const [activeNav, setActiveNav] = useState("Main")
+
+  // Sync active state with URL
+  useEffect(() => {
+    if (pathname === "/shop") {
+      setActiveNav("Shop")
+    } else if (pathname === "/") {
+      // If we are on main page, check if we have a requested view from navigation
+      // Otherwise keep current or default to Main. 
+      // Note: We don't want to reset if user is just switching tabs locally on home page.
+      // But if we arrive from /shop, we might want to default to Main.
+      if (activeNav === "Shop") setActiveNav("Main")
+    }
+  }, [pathname])
+
+  const handleNavigation = (name: string) => {
+    if (name === "Shop") {
+      router.push("/shop")
+      return
+    }
+
+    // For all home tabs (Main, Areas, Statistics, Settings)
+    // If we are on Shop page, navigate back to home first
+    if (pathname === "/shop") {
+      router.push("/")
+      // The useEffect will handle setting activeNav to "Main" when pathname changes
+      // But we want to set it to the clicked tab instead
+      setTimeout(() => setActiveNav(name), 0)
+    } else {
+      // Already on home page, just switch tabs
+      setActiveNav(name)
+    }
+  }
+
   const [showSystemGuide, setShowSystemGuide] = useState(false)
   const { nickname } = useNickname()
   const { uiColor } = useUIColor()
@@ -104,9 +143,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             style={
               activeNav === item.name
                 ? {
-                    backgroundColor: uiColor,
-                    color: "white",
-                  }
+                  backgroundColor: uiColor,
+                  color: "white",
+                }
                 : undefined
             }
             onMouseEnter={(e) => {
@@ -119,7 +158,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 e.currentTarget.style.backgroundColor = "transparent"
               }
             }}
-            onClick={() => setActiveNav(item.name)}
+            onClick={() => handleNavigation(item.name)}
           >
             <item.icon className="mr-3 h-4 w-4" />
             {item.name}
@@ -151,7 +190,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       </div>
     </div>
   )
-  
+
   return (
     <div className="min-h-screen bg-background flex">
       <DatabaseSync />
@@ -194,26 +233,36 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               })()}
             </div>
 
-            <div className="flex-1 max-w-md ml-4 md:ml-8">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs md:text-sm font-mono text-primary">LEVEL {currentLevel}</span>
-                <span className="text-[10px] md:text-xs text-muted-foreground font-mono">
-                  {totalXP} / {maxXP} XP
-                </span>
+            {/* Right side: Sparks Counter + Level/XP */}
+            <div className="flex items-center gap-4 ml-auto mr-8">
+              {/* Sparks Counter */}
+              <div className="flex items-center gap-1.5 bg-secondary/50 px-3 py-1.5 rounded-full border border-border/50">
+                <Zap className="h-4 w-4 text-orange-500 fill-orange-500 animate-pulse" />
+                <span className="font-mono font-bold text-orange-500">{useSparks().sparks}</span>
               </div>
-              <Progress value={xpProgress} className="h-2 md:h-3 bg-secondary">
-                <div
-                  className="h-full bg-gradient-to-r from-primary to-accent transition-all"
-                  style={{ width: `${xpProgress}%` }}
-                />
-              </Progress>
+
+              {/* Level and XP Progress */}
+              <div className="max-w-md w-48 md:w-64">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs md:text-sm font-mono text-primary">LEVEL {currentLevel}</span>
+                  <span className="text-[10px] md:text-xs text-muted-foreground font-mono">
+                    {totalXP} / {maxXP} XP
+                  </span>
+                </div>
+                <Progress value={xpProgress} className="h-2 md:h-3 bg-secondary">
+                  <div
+                    className="h-full bg-gradient-to-r from-primary to-accent transition-all"
+                    style={{ width: `${xpProgress}%` }}
+                  />
+                </Progress>
+              </div>
             </div>
           </div>
         </header>
 
         {/* Page Content */}
         <main className="flex-1 p-4 md:p-8 overflow-auto">
-          {activeNav === "Main" && children}
+          {(activeNav === "Main" || activeNav === "Shop") && children}
           {activeNav === "Statistics" && <StatisticsContent uiColor={uiColor} />}
           {activeNav === "Areas" && <SkillsListEditable />}
           {activeNav === "Settings" && <SettingsPage />}
@@ -245,7 +294,7 @@ function StatisticsView({ uiColor }: { uiColor: string }) {
     tempLevel += 1
     tempMax = Math.floor(tempMax * 1.4) // або твоя формула прогресії
   }
-  
+
   if (!hasSkills) {
     return (
       <div className="max-w-7xl">
@@ -304,7 +353,7 @@ function StatisticsView({ uiColor }: { uiColor: string }) {
   })
 
   let dailyChartData = Object.entries(dailyXPData)
-    .map(([date, stats]) => ({ 
+    .map(([date, stats]) => ({
       date,
       XP: Math.max(0, stats.total),
       Tasks: stats.tasks,
@@ -374,37 +423,37 @@ function StatisticsView({ uiColor }: { uiColor: string }) {
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
-                <Tooltip
-                  content={({ active, payload }) => {
-                    // #region agent log
-                    fetch('http://127.0.0.1:7242/ingest/252e63c3-cf19-4629-b606-81d571c6b361',{
-                      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
-                        sessionId:'debug-session',runId:'run1',hypothesisId:'A',location:'dashboard-layout.tsx:264',message:'Tooltip render',data:{active,payload},timestamp:Date.now()
-                      })
-                    }).catch(()=>{});
-                    // #endregion
+                  <Tooltip
+                    content={({ active, payload }) => {
+                      // #region agent log
+                      fetch('http://127.0.0.1:7242/ingest/252e63c3-cf19-4629-b606-81d571c6b361', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+                          sessionId: 'debug-session', runId: 'run1', hypothesisId: 'A', location: 'dashboard-layout.tsx:264', message: 'Tooltip render', data: { active, payload }, timestamp: Date.now()
+                        })
+                      }).catch(() => { });
+                      // #endregion
 
-                    if (!active || !payload || !payload[0]) return null;
-                    const d = payload[0].payload;
-                    const percent = d.value;
-                    const xp = d.xp;
-                    const lvl = Math.floor(xp / 100) + 1;
-                    const name = d.name;
-                    return (
-                      <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'6px',padding:'8px',minWidth:'120px',color:'var(--foreground)'}}>
-                        <div><b>{name}</b></div>
-                        <div>{percent}%</div>
-                        <div>{xp} XP</div>
-                        <div>Lv. {lvl}</div>
-                      </div>
-                    );
-                  }}
-                  contentStyle={{
-                    backgroundColor: 'var(--card)',
-                    border: '1px solid var(--border)',
-                    borderRadius: '6px',
-                  }}
-                />
+                      if (!active || !payload || !payload[0]) return null;
+                      const d = payload[0].payload;
+                      const percent = d.value;
+                      const xp = d.xp;
+                      const lvl = Math.floor(xp / 100) + 1;
+                      const name = d.name;
+                      return (
+                        <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '6px', padding: '8px', minWidth: '120px', color: 'var(--foreground)' }}>
+                          <div><b>{name}</b></div>
+                          <div>{percent}%</div>
+                          <div>{xp} XP</div>
+                          <div>Lv. {lvl}</div>
+                        </div>
+                      );
+                    }}
+                    contentStyle={{
+                      backgroundColor: 'var(--card)',
+                      border: '1px solid var(--border)',
+                      borderRadius: '6px',
+                    }}
+                  />
                   <Legend
                     verticalAlign="bottom"
                     height={36}
@@ -464,12 +513,12 @@ function StatisticsView({ uiColor }: { uiColor: string }) {
                       const xp = d.XP;
                       const name = d.name;
                       return (
-                        <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'6px',padding:'8px',minWidth:'120px',color:'var(--foreground)'}}>
+                        <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '6px', padding: '8px', minWidth: '120px', color: 'var(--foreground)' }}>
                           <div><b>{name}</b></div>
                           <div>XP - {xp}</div>
                         </div>
                       );
-                  }}
+                    }}
                     contentStyle={{
                       backgroundColor: 'var(--card)',
                       border: '1px solid var(--border)',
@@ -518,18 +567,18 @@ function StatisticsView({ uiColor }: { uiColor: string }) {
                     cursor={{ fill: 'rgba(0, 0, 0, 0.2)' }}
                     content={({ active, payload }) => {
                       // #region agent log
-                      fetch('http://127.0.0.1:7242/ingest/252e63c3-cf19-4629-b606-81d571c6b361',{
-                        method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-                          sessionId:'debug-session',runId:'run2',hypothesisId:'B',location:'dashboard-layout.tsx:334',message:'Skill XP Comparison Tooltip',data:{active,payload},timestamp:Date.now()
+                      fetch('http://127.0.0.1:7242/ingest/252e63c3-cf19-4629-b606-81d571c6b361', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+                          sessionId: 'debug-session', runId: 'run2', hypothesisId: 'B', location: 'dashboard-layout.tsx:334', message: 'Skill XP Comparison Tooltip', data: { active, payload }, timestamp: Date.now()
                         })
-                      }).catch(()=>{});
+                      }).catch(() => { });
                       // #endregion
                       if (!active || !payload || !payload[0]) return null;
                       const d = payload[0].payload;
                       const xp = d.XP;
                       const date = d.date;
                       return (
-                        <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'6px',padding:'8px',minWidth:'140px',color:'var(--foreground)'}}>
+                        <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '6px', padding: '8px', minWidth: '140px', color: 'var(--foreground)' }}>
                           <div><b>{date}</b></div>
                           <div>Daily XP +{xp}</div>
                         </div>
@@ -599,7 +648,7 @@ function StatisticsView({ uiColor }: { uiColor: string }) {
                       const name = d.name;
                       const level = d.Level;
                       return (
-                        <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'6px',padding:'8px',minWidth:'120px',color:'var(--foreground)'}}>
+                        <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '6px', padding: '8px', minWidth: '120px', color: 'var(--foreground)' }}>
                           <div><b>{name}</b></div>
                           <div>Level - {level}</div>
                         </div>

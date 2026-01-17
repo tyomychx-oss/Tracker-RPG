@@ -12,8 +12,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Pencil, ChevronDown, ChevronUp, Trash2 } from "lucide-react"
-import { useXP, useAreaColors, useAreaFilter, useRecentActivity, useUIColor, useAreaXP, useQuests } from "@/components/providers"
+import { Pencil, ChevronDown, ChevronUp, Trash2, Plus, X, Zap } from "lucide-react"
+import { useXP, useAreaColors, useAreaFilter, useRecentActivity, useUIColor, useAreaXP, useQuests, useSparks } from "@/components/providers"
 
 interface TaskStateSnapshot {
   questId: number
@@ -31,7 +31,8 @@ export function ActiveQuests() {
   const { selectedAreas } = useAreaFilter()
   const { addActivity } = useRecentActivity()
   const { uiColor } = useUIColor()
-  
+  const { addSparks, removeSparks } = useSparks() // Added
+
   const [showArchived, setShowArchived] = useState({
     plans: false,
     dailies: false,
@@ -50,7 +51,9 @@ export function ActiveQuests() {
     frequencyPeriodDays?: number
     resetTime?: string
     streak?: number
+    subtasks?: { id: string; title: string; completed: boolean }[]
   } | null>(null)
+
 
   const [taskSnapshots, setTaskSnapshots] = useState<Record<number, TaskStateSnapshot>>({})
   const [isSnapshotsLoaded, setIsSnapshotsLoaded] = useState(false)
@@ -88,38 +91,38 @@ export function ActiveQuests() {
       const currentUTC = `${utcHour}:${utcMinute}`
       const todayString = now.toDateString()
       const todayStartUTC = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
-      
-      ;(["dailies", "habits"] as const).forEach((category) => {
-        quests[category].forEach((quest: any) => {
-          const resetAt = quest.resetTime || "00:00"
-          if (quest.lastResetDate !== todayString && currentUTC >= resetAt) {
-            if (category === "dailies") {
-              const periodDays = quest.frequencyPeriodDays || 1
-              const periodStart = typeof quest.periodStartAt === "number" ? quest.periodStartAt : todayStartUTC
-              const daysElapsed = Math.floor((todayStartUTC - periodStart) / 86400000)
-              const shouldResetCount = daysElapsed >= periodDays
-              
-              const updates: any = {
-                completed: false,
-                lastCompletedDate: null,
-                lastResetDate: todayString,
+
+        ; (["dailies", "habits"] as const).forEach((category) => {
+          quests[category].forEach((quest: any) => {
+            const resetAt = quest.resetTime || "00:00"
+            if (quest.lastResetDate !== todayString && currentUTC >= resetAt) {
+              if (category === "dailies") {
+                const periodDays = quest.frequencyPeriodDays || 1
+                const periodStart = typeof quest.periodStartAt === "number" ? quest.periodStartAt : todayStartUTC
+                const daysElapsed = Math.floor((todayStartUTC - periodStart) / 86400000)
+                const shouldResetCount = daysElapsed >= periodDays
+
+                const updates: any = {
+                  completed: false,
+                  lastCompletedDate: null,
+                  lastResetDate: todayString,
+                }
+
+                if (shouldResetCount) {
+                  updates.completedCount = 0
+                  updates.periodStartAt = todayStartUTC
+                }
+                updateQuest(category, quest.id, updates)
+              } else {
+                updateQuest(category, quest.id, {
+                  completed: false,
+                  lastCompletedDate: null,
+                  lastResetDate: todayString,
+                } as any)
               }
-              
-              if (shouldResetCount) {
-                updates.completedCount = 0
-                updates.periodStartAt = todayStartUTC
-              }
-              updateQuest(category, quest.id, updates)
-            } else {
-              updateQuest(category, quest.id, {
-                completed: false,
-                lastCompletedDate: null,
-                lastResetDate: todayString,
-              } as any)
             }
-          }
+          })
         })
-      })
     }
 
     checkDailyReset()
@@ -145,14 +148,18 @@ export function ActiveQuests() {
       if (snapshot) {
         // Use snapshot to restore exact previous state
         restorePreviousState(snapshot.previousLevel, snapshot.previousXP, snapshot.previousMaxXP)
-        
+
         // Restore skill XP to previous amount
         const currentSkillXP = areaXPs[skillName] || 0
         const xpToRemove = currentSkillXP - snapshot.previousSkillXP
         if (xpToRemove > 0 && skillName) {
           removeAreaXP(skillName, xpToRemove)
         }
-        
+
+        // Remove Sparks logic
+        const reward = (questObj as any)?.reward || (questObj?.rating === "fast" ? 5 : questObj?.rating === "short" ? 10 : questObj?.rating === "deep" ? 25 : questObj?.rating === "hard" ? 50 : 0)
+        removeSparks(reward)
+
         // Remove snapshot
         setTaskSnapshots((prev) => {
           const newSnapshots = { ...prev }
@@ -166,10 +173,10 @@ export function ActiveQuests() {
           removeAreaXP(skillName, xpAmount)
         }
       }
-      
+
       addActivity(`Uncompleted: ${questTitle}`, -xpAmount, category)
       updateQuest(category, questId, { completed: false, lastCompletedDate: null })
-      
+
     } else {
       // COMPLETE TASK
       const snapshot: TaskStateSnapshot = {
@@ -186,7 +193,12 @@ export function ActiveQuests() {
       if (skillName) {
         addAreaXP(skillName, xpAmount)
       }
-      addActivity(`Completed: ${questTitle}`, xpAmount, category) // Fixed duplicate calls here
+
+      // Add Sparks logic
+      const reward = (questObj as any)?.reward || (questObj?.rating === "fast" ? 5 : questObj?.rating === "short" ? 10 : questObj?.rating === "deep" ? 25 : questObj?.rating === "hard" ? 50 : 0)
+      addSparks(reward)
+
+      addActivity(`Completed: ${questTitle}`, xpAmount, category, reward) // Fixed duplicate calls here
 
       if (category === "habits") {
         const currentStreak = (questObj?.streak || 0) + 1
@@ -239,6 +251,7 @@ export function ActiveQuests() {
       frequencyCount: quest.frequencyCount,
       frequencyPeriodDays: quest.frequencyPeriodDays,
       resetTime: quest.resetTime,
+      subtasks: quest.subtasks || [],
     })
   }
 
@@ -253,6 +266,7 @@ export function ActiveQuests() {
       frequencyCount: editingQuest.frequencyCount,
       frequencyPeriodDays: editingQuest.frequencyPeriodDays,
       resetTime: editingQuest.resetTime,
+      subtasks: editingQuest.subtasks ? editingQuest.subtasks.filter(s => s.title.trim() !== "") : [],
     })
     setEditingQuest(null)
   }
@@ -271,10 +285,10 @@ export function ActiveQuests() {
     const skillColor = areaColors[quest.skill] || uiColor
     const priorityBorder =
       quest.rating === "fast" ? "border-l-lime-500"
-      : quest.rating === "short" ? "border-l-cyan-400"
-      : quest.rating === "deep" ? "border-l-amber-500"
-      : quest.rating === "hard" ? "border-l-red-500" // Added hard check
-      : "border-l-gray-300"
+        : quest.rating === "short" ? "border-l-cyan-400"
+          : quest.rating === "deep" ? "border-l-amber-500"
+            : quest.rating === "hard" ? "border-l-red-500" // Added hard check
+              : "border-l-gray-300"
 
     return (
       <Card
@@ -296,6 +310,10 @@ export function ActiveQuests() {
                 <h4 className="font-medium text-foreground">{quest.title}</h4>
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground font-mono whitespace-nowrap">+{quest.xp} XP</span>
+                  <span className="text-xs text-orange-500 font-mono whitespace-nowrap flex items-center gap-0.5">
+                    <Zap className="h-3 w-3" />
+                    +{(quest as any).reward || (quest.rating === "fast" ? 5 : quest.rating === "short" ? 10 : quest.rating === "deep" ? 25 : quest.rating === "hard" ? 50 : 0)}
+                  </span>
                   {quest.skill && (
                     <Badge
                       variant="outline"
@@ -339,6 +357,33 @@ export function ActiveQuests() {
                   )}
                 </div>
               </div>
+
+              {/* Subtasks rendering */}
+              {quest.subtasks && quest.subtasks.length > 0 && (
+                <div className="space-y-1 mt-2">
+                  {quest.subtasks.map((subtask: any) => (
+                    <div key={subtask.id} className="flex items-center gap-2 text-sm">
+                      <div
+                        className={`h-4 w-4 rounded-full border border-muted-foreground cursor-pointer flex items-center justify-center transition-colors ${subtask.completed ? "bg-primary border-primary" : "hover:border-primary"}`}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          if (isArchived) return
+                          const updatedSubtasks = quest.subtasks.map((s: any) =>
+                            s.id === subtask.id ? { ...s, completed: !s.completed } : s
+                          )
+                          updateQuest(category, quest.id, { subtasks: updatedSubtasks })
+                        }}
+                      >
+                        {subtask.completed && <div className="h-2 w-2 rounded-full bg-white" />}
+                      </div>
+                      <span className={`${subtask.completed ? "line-through text-muted-foreground" : "text-foreground"}`}>
+                        {subtask.title}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {quest.completed && !isArchived && (
                 <Button
                   size="sm"
@@ -433,10 +478,10 @@ export function ActiveQuests() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="dailies" className="w-full">
+          <Tabs defaultValue="plans" className="w-full">
             <TabsList className="grid w-full grid-cols-3 bg-secondary">
-              <TabsTrigger value="dailies">Daily</TabsTrigger>
               <TabsTrigger value="plans">Tasks</TabsTrigger>
+              <TabsTrigger value="dailies">Daily</TabsTrigger>
               <TabsTrigger value="habits">Habits</TabsTrigger>
             </TabsList>
 
@@ -465,7 +510,7 @@ export function ActiveQuests() {
                   className="bg-input"
                 />
               </div>
-              
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-2">
                   <Label htmlFor="skill">Area</Label>
@@ -502,7 +547,7 @@ export function ActiveQuests() {
                   </Select>
                 </div>
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="xp-amount">Amount of XP</Label>
                 <Input
@@ -579,6 +624,90 @@ export function ActiveQuests() {
                   </div>
                 </div>
               )}
+
+              {/* Subtasks Editing */}
+              <div className="space-y-3 pt-2 border-t border-border">
+                <Label>Subtasks</Label>
+
+                {(editingQuest.subtasks && editingQuest.subtasks.length > 0) ? (
+                  <div className="space-y-2">
+                    {editingQuest.subtasks.map((subtask, index) => {
+                      const isLast = index === (editingQuest.subtasks || []).length - 1
+                      return (
+                        <div key={subtask.id} className="flex items-center gap-2">
+                          <Input
+                            value={subtask.title}
+                            onChange={(e) => {
+                              const newSubtasks = [...(editingQuest.subtasks || [])]
+                              newSubtasks[index].title = e.target.value
+                              setEditingQuest({ ...editingQuest, subtasks: newSubtasks })
+                            }}
+                            placeholder="Enter subtask..."
+                            className="bg-input h-8 text-sm"
+                            autoFocus={isLast && subtask.title === "" && (editingQuest.subtasks || []).length > 1}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && isLast) {
+                                e.preventDefault()
+                                setEditingQuest({
+                                  ...editingQuest,
+                                  subtasks: [
+                                    ...(editingQuest.subtasks || []),
+                                    { id: crypto.randomUUID(), title: "", completed: false }
+                                  ]
+                                })
+                              }
+                            }}
+                          />
+                          {isLast ? (
+                            <Button
+                              onClick={() => {
+                                setEditingQuest({
+                                  ...editingQuest,
+                                  subtasks: [
+                                    ...(editingQuest.subtasks || []),
+                                    { id: crypto.randomUUID(), title: "", completed: false }
+                                  ]
+                                })
+                              }}
+                              className="bg-primary hover:bg-primary/90 text-primary-foreground h-8 w-8 p-0 shrink-0"
+                              size="sm"
+                            >
+                              <Plus className="h-4 w-4" />
+                            </Button>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                setEditingQuest({
+                                  ...editingQuest,
+                                  subtasks: editingQuest.subtasks?.filter(s => s.id !== subtask.id)
+                                })
+                              }}
+                              className="text-muted-foreground hover:text-destructive transition-colors h-8 w-8 flex items-center justify-center shrink-0"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <Button
+                    onClick={() => {
+                      setEditingQuest({
+                        ...editingQuest,
+                        subtasks: [
+                          { id: crypto.randomUUID(), title: "", completed: false }
+                        ]
+                      })
+                    }}
+                    className="w-full h-8 bg-primary hover:bg-primary/90 text-primary-foreground"
+                    size="sm"
+                  >
+                    <Plus className="h-4 w-4 mr-2" /> Add Subtask
+                  </Button>
+                )}
+              </div>
             </div>
           )}
           <DialogFooter>

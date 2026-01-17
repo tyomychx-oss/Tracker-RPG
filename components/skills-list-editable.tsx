@@ -154,9 +154,8 @@ export function SkillsListEditable() {
             skills.map((skill, index) => (
               <div
                 key={index}
-                className={`flex items-center justify-between py-2 border-b border-border last:border-0 cursor-pointer hover:bg-secondary/50 px-2 -mx-2 rounded transition-colors ${
-                  selectedAreas.includes(skill.name) ? "bg-primary/10 border-l-4 border-l-primary" : ""
-                }`}
+                className={`flex items-center justify-between py-2 border-b border-border last:border-0 cursor-pointer hover:bg-secondary/50 px-2 -mx-2 rounded transition-colors ${selectedAreas.includes(skill.name) ? "bg-primary/10 border-l-4 border-l-primary" : ""
+                  }`}
               >
                 <div className="flex items-center gap-12">
                   <span className="font-semibold text-foreground">{skill.name}</span>
@@ -221,54 +220,6 @@ export function SkillsListEditable() {
             ))
           )}
 
-          {archivedAreasList.length > 0 && (
-            <div className="pt-4 mt-4 border-t border-border">
-              <button
-                onClick={() => setShowArchivedAreas(!showArchivedAreas)}
-                className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 w-full justify-center transition-colors mb-2"
-              >
-                Archive {showArchivedAreas ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-              </button>
-
-              {showArchivedAreas && (
-                <div className="space-y-3">
-                  {archivedAreasList.map((area, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center justify-between py-2 border-b border-border last:border-0 px-2 -mx-2 opacity-75"
-                    >
-                      <div className="flex items-center gap-12">
-                        <span className="font-semibold text-muted-foreground">{area.name}</span>
-                        <div className="flex gap-4">
-                          <span className="text-sm text-muted-foreground">Level {area.level}</span>
-                          <span className="text-sm text-muted-foreground">{area.xp} XP</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={(e) => handleUnarchive(area.name, e)}
-                                className="h-8 w-8 p-0 hover:bg-secondary"
-                              >
-                                <Archive className="h-4 w-4 text-white rotate-180" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>Unarchive</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
         </CardContent>
         <CardContent className="pt-0">
           <div className="pt-4 border-t border-border">
@@ -328,9 +279,8 @@ export function SkillsListEditable() {
                   <button
                     key={color}
                     onClick={() => handleColorSelect(color)}
-                    className={`aspect-square rounded border-2 transition-all w-10 h-10 ${
-                      selectedColor === color ? "border-foreground scale-110" : "border-border hover:border-foreground"
-                    }`}
+                    className={`aspect-square rounded border-2 transition-all w-10 h-10 ${selectedColor === color ? "border-foreground scale-110" : "border-border hover:border-foreground"
+                      }`}
                     style={{ backgroundColor: color }}
                   />
                 ))}
@@ -373,9 +323,8 @@ export function SkillsListEditable() {
                   <button
                     key={color}
                     onClick={() => setNewSkillColor(color)}
-                    className={`aspect-square rounded border-2 transition-all w-10 h-10 ${
-                      newSkillColor === color ? "border-foreground scale-110" : "border-border hover:border-foreground"
-                    }`}
+                    className={`aspect-square rounded border-2 transition-all w-10 h-10 ${newSkillColor === color ? "border-foreground scale-110" : "border-border hover:border-foreground"
+                      }`}
                     style={{ backgroundColor: color }}
                   />
                 ))}

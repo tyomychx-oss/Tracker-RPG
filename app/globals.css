@@ -95,4 +95,14 @@
   .nav-button-hover:hover {
     background-color: color-mix(in srgb, var(--ui-color, #de6550) 20%, transparent);
   }
+  
+  /* Custom slider styling with dynamic UI color */
+  [data-slot="slider-range"] {
+    background-color: var(--slider-color, var(--primary));
+  }
+  
+  [data-slot="slider-thumb"] {
+    background-color: var(--slider-color, var(--primary));
+    border-color: var(--slider-color, var(--primary));
+  }
 }

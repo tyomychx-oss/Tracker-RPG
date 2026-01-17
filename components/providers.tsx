@@ -2,6 +2,7 @@
 
 import type React from "react"
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
+import { ShopProvider } from "@/components/shop-provider"
 
 // --- Interfaces ---
 export interface XPContextType {
@@ -51,6 +52,12 @@ export interface Quest {
   lastResetDate?: string | null
   periodStartAt?: number
   streak?: number
+  subtasks?: {
+    id: string
+    title: string
+    completed: boolean
+  }[]
+  reward?: number
 }
 
 export interface QuestsContextType {
@@ -67,8 +74,8 @@ export interface QuestsContextType {
 }
 
 export interface RecentActivityContextType {
-  activities: Array<{ id: number; action: string; timestamp: number; xp?: number; type?: "plans" | "dailies" | "habits" }>
-  addActivity: (action: string, xp?: number, type?: "plans" | "dailies" | "habits") => void
+  activities: Array<{ id: number; action: string; timestamp: number; xp?: number; sparks?: number; type?: "plans" | "dailies" | "habits" }>
+  addActivity: (action: string, xp?: number, type?: "plans" | "dailies" | "habits", sparks?: number) => void
   resetActivities: () => void
 }
 
@@ -80,6 +87,12 @@ export interface UIColorContextType {
 export interface NicknameContextType {
   nickname: string
   setNickname: (name: string) => void
+}
+
+export interface SparksContextType {
+  sparks: number
+  addSparks: (amount: number) => void
+  removeSparks: (amount: number) => void
 }
 
 export interface TaskStateSnapshot {
@@ -95,6 +108,7 @@ export interface UserProfile {
   totalXP: number
   currentLevel: number
   maxXP: number
+  sparks: number // New field
   skillXPs: Record<string, number>
   skillColors: Record<string, string>
   quests: {
@@ -102,7 +116,7 @@ export interface UserProfile {
     dailies: Quest[]
     habits: Quest[]
   }
-  activities: Array<{ id: number; action: string; timestamp: number; xp?: number; type?: "plans" | "dailies" | "habits" }>
+  activities: Array<{ id: number; action: string; timestamp: number; xp?: number; sparks?: number; type?: "plans" | "dailies" | "habits" }>
   uiColor: string
   taskSnapshots?: Record<number, TaskStateSnapshot>
   archivedSkills?: string[]
@@ -129,6 +143,7 @@ const UIColorContext = createContext<UIColorContextType | undefined>(undefined)
 const NicknameContext = createContext<NicknameContextType | undefined>(undefined)
 const QuestsContext = createContext<QuestsContextType | undefined>(undefined)
 const AreasContext = createContext<AreasContextType | undefined>(undefined)
+const SparksContext = createContext<SparksContextType | undefined>(undefined)
 
 // --- Hooks ---
 export function useXP() {
@@ -170,6 +185,12 @@ export function useUIColor() {
 export function useNickname() {
   const context = useContext(NicknameContext)
   if (!context) throw new Error("useNickname must be used within NicknameProvider")
+  return context
+}
+
+export function useSparks() {
+  const context = useContext(SparksContext)
+  if (!context) throw new Error("useSparks must be used within SparksProvider")
   return context
 }
 
@@ -296,26 +317,26 @@ export function XPProvider({ children }: { children: ReactNode }) {
     const storedProfile = localStorage.getItem("currentUserProfile")
     if (storedProfile) {
       const profile: UserProfile = JSON.parse(storedProfile)
-      
+
       // Calculate Accumulated XP from profile
       const accXP = calculateTotalXP(profile.currentLevel || 1, profile.totalXP || 0, profile.maxXP || 200)
-      
+
       // Calculate Daily XP from activities
       let dailyXP = 0
       if (profile.activities) {
         const today = new Date().toDateString()
         dailyXP = profile.activities
           .filter((a) => {
-             const isToday = new Date(a.timestamp).toDateString() === today
-             // Only count positive XP gains (completed tasks), ignore penalties for now or handle net?
-             // User said "Daily XP Progress writes 1050". That chart usually sums positive gains.
-             // But if I uncomplete a task, I lose XP.
-             // If I sum ALL activities (pos and neg) for today:
-             return isToday
+            const isToday = new Date(a.timestamp).toDateString() === today
+            // Only count positive XP gains (completed tasks), ignore penalties for now or handle net?
+            // User said "Daily XP Progress writes 1050". That chart usually sums positive gains.
+            // But if I uncomplete a task, I lose XP.
+            // If I sum ALL activities (pos and neg) for today:
+            return isToday
           })
           .reduce((sum, a) => sum + (a.xp || 0), 0)
       }
-      
+
       // If Accumulated XP is less than Daily XP (meaning we lost track of some XP), sync it up.
       // We only sync if accXP < dailyXP. If accXP > dailyXP, it's fine (previous days' XP).
       if (accXP < dailyXP) {
@@ -427,7 +448,7 @@ export function AreaXPProvider({ children }: { children: ReactNode }) {
         .select("skill_xps")
         .eq("user_id", session.user.id)
         .single();
-      if (data) setAreaXPs(data.skill_xps||{});
+      if (data) setAreaXPs(data.skill_xps || {});
       setIsLoaded(true);
     }
     fetchAreaXPs();
@@ -643,8 +664,8 @@ export function RecentActivityProvider({ children }: { children: ReactNode }) {
     }
   }, [activities, isLoaded])
 
-  const addActivity = (action: string, xp?: number, type?: "plans" | "dailies" | "habits") => {
-    setActivities((prev) => [{ id: Date.now(), action, timestamp: Date.now(), xp, type }, ...prev.slice(0, 999)])
+  const addActivity = (action: string, xp?: number, type?: "plans" | "dailies" | "habits", sparks?: number) => {
+    setActivities((prev) => [{ id: Date.now(), action, timestamp: Date.now(), xp, sparks, type }, ...prev.slice(0, 999)])
   }
 
   const resetActivities = () => {
@@ -679,6 +700,55 @@ export function UIColorProvider({ children }: { children: ReactNode }) {
   }, [uiColor, isLoaded])
 
   return <UIColorContext.Provider value={{ uiColor, setUIColor }}>{children}</UIColorContext.Provider>
+}
+
+export function SparksProvider({ children }: { children: ReactNode }) {
+  const [sparks, setSparks] = useState(0)
+  const [isLoaded, setIsLoaded] = useState(false)
+
+  useEffect(() => {
+    async function fetchSparks() {
+      const { createClient } = await import("@/utils/supabase/client");
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return setIsLoaded(true);
+      const { data } = await supabase
+        .from("user_profiles")
+        .select("sparks")
+        .eq("user_id", session.user.id)
+        .single();
+      if (data) setSparks(data.sparks || 0);
+      setIsLoaded(true);
+    }
+    fetchSparks();
+  }, [])
+
+  useEffect(() => {
+    if (!isLoaded) return
+    const storedProfile = localStorage.getItem("currentUserProfile")
+    if (storedProfile) {
+      const profile: UserProfile = JSON.parse(storedProfile)
+      profile.sparks = sparks
+      localStorage.setItem("currentUserProfile", JSON.stringify(profile))
+      localStorage.setItem(`userProfile_${profile.nickname}`, JSON.stringify(profile))
+    }
+  }, [sparks, isLoaded])
+
+  const addSparks = (amount: number) => {
+    setSparks((prev) => prev + amount)
+  }
+
+  const removeSparks = (amount: number) => {
+    setSparks((prev) => Math.max(0, prev - amount))
+  }
+
+  return (
+    <SparksContext.Provider value={{ sparks, addSparks, removeSparks }}>
+      <ShopProvider>
+        {children}
+      </ShopProvider>
+    </SparksContext.Provider>
+  )
 }
 
 export function NicknameProvider({ children }: { children: ReactNode }) {
@@ -747,8 +817,9 @@ export function AreasProvider({ children }: { children: ReactNode }) {
         profile.quests.habits = profile.quests.habits.filter((q) => q.skill !== areaName)
       }
       localStorage.setItem("currentUserProfile", JSON.stringify(profile))
+      localStorage.setItem("currentUserProfile", JSON.stringify(profile))
       localStorage.setItem(`userProfile_${profile.nickname}`, JSON.stringify(profile))
-      window.location.reload()
+      // Removed window.location.reload()
     }
 
     // Update other contexts which will handle their own state and localStorage sync
@@ -826,7 +897,7 @@ export function AreasProvider({ children }: { children: ReactNode }) {
     if (newColor) {
       setAreaColor(nextName, newColor)
     }
-    ;(["plans", "dailies", "habits"] as const).forEach((category) => {
+    ; (["plans", "dailies", "habits"] as const).forEach((category) => {
       quests[category].forEach((q) => {
         if (q.skill === oldName) {
           updateQuest(category, q.id, { skill: nextName })

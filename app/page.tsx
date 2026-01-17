@@ -13,20 +13,11 @@ import { Button } from "@/components/ui/button"
 import { Award } from "lucide-react"
 
 // ІМПОРТУЄМО все з нового файлу
-import { 
-  XPProvider, 
-  QuestsProvider, 
-  AreaXPProvider, 
-  AreaColorsProvider, 
-  AreasProvider, 
-  AreaFilterProvider, 
-  RecentActivityProvider, 
-  UIColorProvider, 
-  NicknameProvider,
+import {
   useRecentActivity,
   useNickname,
   useUIColor,
-  type UserProfile 
+  type UserProfile
 } from "@/components/providers"
 
 export default function Page() {
@@ -40,9 +31,9 @@ export default function Page() {
     const checkAuth = async () => {
       const { createClient } = await import("@/utils/supabase/client")
       const supabase = createClient()
-      
+
       const { data: { session } } = await supabase.auth.getSession()
-      
+
       if (!session) {
         window.location.href = "/auth/sign-in"
         return
@@ -56,7 +47,7 @@ export default function Page() {
 
       if (error || !profile || !profile.nickname) {
         const nicknameFromMetadata = session.user.user_metadata?.nickname
-        
+
         if (nicknameFromMetadata) {
           await supabase
             .from("user_profiles")
@@ -75,7 +66,7 @@ export default function Page() {
             }, {
               onConflict: "user_id"
             })
-          
+
           const newProfile: UserProfile = {
             nickname: nicknameFromMetadata,
             totalXP: 0,
@@ -87,13 +78,14 @@ export default function Page() {
             activities: [],
             uiColor: "#de6550",
             taskSnapshots: {},
+            sparks: 0,
           }
-          
+
           localStorage.setItem("currentUserProfile", JSON.stringify(newProfile))
-          setIsCheckingAuth(false) 
+          setIsCheckingAuth(false)
           return
         }
-        
+
         setShowOnboarding(true)
         setIsCheckingAuth(false)
         return
@@ -110,8 +102,9 @@ export default function Page() {
         activities: profile.activities || [],
         uiColor: profile.ui_color || "#de6550",
         taskSnapshots: profile.task_snapshots || {},
+        sparks: profile.sparks || 0,
       }
-      
+
       localStorage.setItem("currentUserProfile", JSON.stringify(userProfile))
       setIsCheckingAuth(false)
     }
@@ -138,7 +131,7 @@ export default function Page() {
 
     const { createClient } = await import("@/utils/supabase/client")
     const supabase = createClient()
-    
+
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) {
       window.location.href = "/auth/sign-in"
@@ -183,8 +176,9 @@ export default function Page() {
       activities: [],
       uiColor: "#de6550",
       taskSnapshots: {},
+      sparks: 0,
     }
-    
+
     localStorage.setItem("currentUserProfile", JSON.stringify(newProfile))
     setShowOnboarding(false)
   }
@@ -195,64 +189,48 @@ export default function Page() {
   }
 
   return (
-    <XPProvider>
-      <QuestsProvider>
-        <AreaXPProvider>
-          <AreaColorsProvider>
-            <AreasProvider>
-              <AreaFilterProvider>
-                <RecentActivityProvider>
-                  <UIColorProvider>
-                    <NicknameProvider>
-                      {isCheckingAuth ? (
-                        <div className="min-h-screen bg-background flex items-center justify-center">
-                          <div className="text-muted-foreground">Loading...</div>
-                        </div>
-                      ) : showOnboarding ? (
-                        <OnboardingDialog
-                          nickname={tempNickname}
-                          setNickname={setTempNickname}
-                          onStart={handleStartTracking}
-                        />
-                      ) : (
-                        <DashboardLayout>
-                          {isMobile ? (
-                            <div className="space-y-6" onClick={handleBackgroundClick}>
-                              <ActiveQuests />
-                              <SkillsList />
-                              <div className="mt-6 mb-6">
-                                {!quickAddOpen ? (
-                                  <MobileQuickAddButton onOpen={() => setQuickAddOpen(true)} />
-                                ) : (
-                                  <QuickAdd />
-                                )}
-                              </div>
-                              {!quickAddOpen && <MobileRecentActivity />}
-                            </div>
-                          ) : (
-                            <div className="grid grid-cols-12 gap-6" onClick={handleBackgroundClick}>
-                              <div className="col-span-5 space-y-6">
-                                <SkillsList />
-                              </div>
-                              <div className="col-span-4">
-                                <ActiveQuests />
-                              </div>
-                              <div className="col-span-3 space-y-6">
-                                <QuickAdd />
-                              </div>
-                            </div>
-                          )}
-                        </DashboardLayout>
-                      )}
-                    </NicknameProvider>
-                  </UIColorProvider>
-                </RecentActivityProvider>
-              </AreaFilterProvider>
-            </AreasProvider>
-          </AreaColorsProvider>
-        </AreaXPProvider>
-      </QuestsProvider>
-    </XPProvider>
+    <>
+      {isCheckingAuth ? (
+        <div className="min-h-screen bg-background flex items-center justify-center">
+          <div className="text-muted-foreground">Loading...</div>
+        </div>
+      ) : showOnboarding ? (
+        <OnboardingDialog
+          nickname={tempNickname}
+          setNickname={setTempNickname}
+          onStart={handleStartTracking}
+        />
+      ) : (
+        <DashboardLayout>
+          {isMobile ? (
+            <div className="space-y-6" onClick={handleBackgroundClick}>
+              <ActiveQuests />
+              <SkillsList />
+              <div className="mt-6 mb-6">
+                {!quickAddOpen ? (
+                  <MobileQuickAddButton onOpen={() => setQuickAddOpen(true)} />
+                ) : (
+                  <QuickAdd />
+                )}
+              </div>
+              {!quickAddOpen && <MobileRecentActivity />}
+            </div>
+          ) : (
+            <div className="grid grid-cols-12 gap-6" onClick={handleBackgroundClick}>
+              <div className="col-span-5 space-y-6">
+                <SkillsList />
+              </div>
+              <div className="col-span-4">
+                <ActiveQuests />
+              </div>
+              <div className="col-span-3 space-y-6">
+                <QuickAdd />
+              </div>
+            </div>
+          )}
+        </DashboardLayout>
+      )}
+    </>
   )
 }
 

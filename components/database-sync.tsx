@@ -2,14 +2,15 @@
 
 import { useEffect, useRef, useState } from "react"
 import { createClient } from "@/utils/supabase/client"
-import { 
-  useXP, 
-  useQuests, 
-  useAreaXP, 
-  useAreaColors, 
-  useRecentActivity, 
-  useUIColor, 
-  useNickname 
+import {
+  useXP,
+  useQuests,
+  useAreaXP,
+  useAreaColors,
+  useRecentActivity,
+  useUIColor,
+  useNickname,
+  useSparks
 } from "@/components/providers"
 
 export function DatabaseSync() {
@@ -20,9 +21,16 @@ export function DatabaseSync() {
   const { activities } = useRecentActivity()
   const { uiColor } = useUIColor()
   const { nickname } = useNickname()
-  
+  const { sparks } = useSparks()
+
   const [status, setStatus] = useState<"saved" | "saving" | "error">("saved")
+  const [mounted, setMounted] = useState(false)
   const timeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Fix hydration: only render after mount
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   useEffect(() => {
     // Якщо нікнейму немає, значить юзер ще не завантажився або не залогінений
@@ -52,11 +60,17 @@ export function DatabaseSync() {
           skill_colors: areaColors,
           activities,
           ui_color: uiColor,
+          sparks,
           updated_at: new Date().toISOString(),
         })
 
       if (error) {
-        console.error("Sync error:", error)
+        console.error("Sync error:", error.message || "Unknown error")
+        console.error("Error details:", {
+          code: error.code,
+          details: error.details,
+          hint: error.hint,
+        })
         setStatus("error")
       } else {
         setStatus("saved")
@@ -66,7 +80,10 @@ export function DatabaseSync() {
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current)
     }
-  }, [totalXP, currentLevel, maxXP, quests, areaXPs, areaColors, activities, uiColor, nickname])
+  }, [totalXP, currentLevel, maxXP, quests, areaXPs, areaColors, activities, uiColor, nickname, sparks])
+
+  // Prevent hydration mismatch by not rendering until mounted
+  if (!mounted) return null
 
   // Маленький індикатор в кутку екрану
   return (

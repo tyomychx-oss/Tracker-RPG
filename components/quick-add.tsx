@@ -1,12 +1,11 @@
-"use client"
-
 import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, Award } from "lucide-react"
+import { Switch } from "@/components/ui/switch"
+import { Plus, Award, X } from "lucide-react"
 import { useRecentActivity, useUIColor, useQuests, useAreas } from "@/components/providers"
 
 export function QuickAdd() {
@@ -18,10 +17,30 @@ export function QuickAdd() {
   const [dailyCount, setDailyCount] = useState("1")
   const [dailyPeriodDays, setDailyPeriodDays] = useState("1")
   const [dailyResetTime, setDailyResetTime] = useState("00:00")
+
+  // Subtasks State
+  const [showSubtasks, setShowSubtasks] = useState(false)
+  const [subtasks, setSubtasks] = useState<{ id: string; title: string; completed: boolean }[]>([])
+
   const { activities } = useRecentActivity()
   const { uiColor } = useUIColor()
   const { addQuest } = useQuests()
   const { areas: availableAreas } = useAreas()
+
+  const handleAddSubtask = () => {
+    setSubtasks((prev) => [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
+        title: "",
+        completed: false,
+      },
+    ])
+  }
+
+  const handleRemoveSubtask = (id: string) => {
+    setSubtasks((prev) => prev.filter((s) => s.id !== id))
+  }
 
   const handleAddTask = () => {
     if (!taskName.trim()) return
@@ -35,6 +54,12 @@ export function QuickAdd() {
       completed: false,
       archivedAt: null,
       lastCompletedDate: null,
+
+      subtasks: showSubtasks ? subtasks.filter(s => s.title.trim() !== "") : [],
+      reward: taskPriority === "fast" ? 5 :
+        taskPriority === "short" ? 10 :
+          taskPriority === "deep" ? 25 :
+            taskPriority === "hard" ? 50 : 0,
     } as any
 
     if (taskType === "dailies") {
@@ -54,6 +79,8 @@ export function QuickAdd() {
     // Reset form
     setTaskName("")
     setTaskXP("25")
+    setShowSubtasks(false)
+    setSubtasks([])
   }
 
   const formatTimestamp = (timestamp: number) => {
@@ -108,40 +135,40 @@ export function QuickAdd() {
             </div>
 
             <div className="space-y-2">
-            <Label htmlFor="task-skill" className="text-foreground">
-              Area
-            </Label>
-            <Select value={taskSkill} onValueChange={setTaskSkill}>
-              <SelectTrigger id="task-skill" className="bg-input">
-                <SelectValue placeholder="No area" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">No area</SelectItem>
-                {(availableAreas || []).map((skill) => (
-                  <SelectItem key={skill} value={skill}>
-                    {skill}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="task-priority" className="text-foreground">
-              Priority
-            </Label>
-            <Select value={taskPriority} onValueChange={setTaskPriority}>
-              <SelectTrigger id="task-priority" className="bg-input">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="fast">Fast</SelectItem>
-                <SelectItem value="short">Short</SelectItem>
-                <SelectItem value="deep">Deep</SelectItem>
-                <SelectItem value="hard">Hard</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+              <Label htmlFor="task-skill" className="text-foreground">
+                Area
+              </Label>
+              <Select value={taskSkill} onValueChange={setTaskSkill}>
+                <SelectTrigger id="task-skill" className="bg-input">
+                  <SelectValue placeholder="No area" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No area</SelectItem>
+                  {(availableAreas || []).map((skill) => (
+                    <SelectItem key={skill} value={skill}>
+                      {skill}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="task-priority" className="text-foreground">
+                Priority
+              </Label>
+              <Select value={taskPriority} onValueChange={setTaskPriority}>
+                <SelectTrigger id="task-priority" className="bg-input">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="fast">Fast</SelectItem>
+                  <SelectItem value="short">Short</SelectItem>
+                  <SelectItem value="deep">Deep</SelectItem>
+                  <SelectItem value="hard">Hard</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -217,6 +244,81 @@ export function QuickAdd() {
               </div>
             </div>
           )}
+
+          {/* Subtasks Section */}
+          <div className="space-y-4 pt-2 border-t border-border">
+            <div className="flex items-center gap-2">
+              <Switch
+                id="add-subtasks"
+                checked={showSubtasks}
+                onCheckedChange={(checked) => {
+                  setShowSubtasks(checked)
+                  if (checked && subtasks.length === 0) {
+                    setSubtasks([{ id: crypto.randomUUID(), title: "", completed: false }])
+                  }
+                }}
+              />
+              <Label htmlFor="add-subtasks" className="text-foreground cursor-pointer">
+                Add Subtasks
+              </Label>
+            </div>
+
+            {showSubtasks && (
+              <div className="space-y-3 pl-2 border-l-2 border-border ml-1">
+                <div className="space-y-2">
+                  {subtasks.map((subtask, index) => {
+                    const isLast = index === subtasks.length - 1
+                    return (
+                      <div key={subtask.id} className="flex items-center gap-2">
+                        <Input
+                          value={subtask.title}
+                          onChange={(e) => {
+                            const newSubtasks = [...subtasks]
+                            newSubtasks[index].title = e.target.value
+                            setSubtasks(newSubtasks)
+                          }}
+                          placeholder="Enter subtask..."
+                          className="bg-input h-8 text-sm"
+                          autoFocus={isLast && subtask.title === "" && subtasks.length > 1}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && isLast) {
+                              e.preventDefault()
+                              handleAddSubtask()
+                            }
+                          }}
+                        />
+                        {isLast ? (
+                          <Button
+                            onClick={handleAddSubtask}
+                            className="bg-primary hover:bg-primary/90 text-primary-foreground h-8 w-8 p-0 shrink-0"
+                            size="sm"
+                          >
+                            <Plus className="h-4 w-4" />
+                          </Button>
+                        ) : (
+                          <button
+                            onClick={() => handleRemoveSubtask(subtask.id)}
+                            className="text-muted-foreground hover:text-destructive transition-colors h-8 w-8 flex items-center justify-center shrink-0"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    )
+                  })}
+                  {subtasks.length === 0 && (
+                    <Button
+                      onClick={handleAddSubtask}
+                      className="w-full h-8 bg-primary hover:bg-primary/90 text-primary-foreground"
+                      size="sm"
+                    >
+                      <Plus className="h-4 w-4 mr-2" /> Add Subtask
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
 
           <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground" onClick={handleAddTask}>
             <Plus className="mr-2 h-4 w-4" />

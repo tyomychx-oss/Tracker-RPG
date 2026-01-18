@@ -21,7 +21,7 @@ export interface Transaction {
     id: string
     reward_snapshot: string
     cost: number
-    type: "purchase" | "wheel_spin"
+    type: "purchase" | "wheel_spin" | "item_created" | "item_deleted" | "item_updated"
     created_at: string
 }
 
@@ -122,6 +122,8 @@ export function ShopProvider({ children }: { children: ReactNode }) {
             if (data) {
                 console.log("Reward created successfully:", data)
                 setRewards(prev => [data, ...prev])
+                // Log activity
+                await recordTransaction(data.title, 0, "item_created")
             }
 
             return data
@@ -150,6 +152,9 @@ export function ShopProvider({ children }: { children: ReactNode }) {
     }
 
     const deleteReward = async (id: string) => {
+        // Get reward name before deleting
+        const reward = rewards.find(r => r.id === id)
+
         const { error } = await supabase
             .from("shop_rewards")
             .delete()
@@ -157,10 +162,14 @@ export function ShopProvider({ children }: { children: ReactNode }) {
 
         if (!error) {
             setRewards(prev => prev.filter(r => r.id !== id))
+            // Log activity
+            if (reward) {
+                await recordTransaction(reward.title, 0, "item_deleted")
+            }
         }
     }
 
-    const recordTransaction = async (rewardName: string, cost: number, type: "purchase" | "wheel_spin") => {
+    const recordTransaction = async (rewardName: string, cost: number, type: "purchase" | "wheel_spin" | "item_created" | "item_deleted" | "item_updated") => {
         const { data: { session } } = await supabase.auth.getSession()
         if (!session) return
 

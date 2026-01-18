@@ -18,6 +18,7 @@ export const metadata: Metadata = {
 }
 
 import { Providers } from "@/app/providers"
+import { DashboardLayout } from "@/components/dashboard-layout"
 
 export default function RootLayout({
   children,
@@ -28,7 +29,9 @@ export default function RootLayout({
     <html lang="en" className="dark" suppressHydrationWarning>
       <body className={`font-sans antialiased`} suppressHydrationWarning>
         <Providers>
-          {children}
+          <DashboardLayout>
+            {children}
+          </DashboardLayout>
         </Providers>
         <Analytics />
       </body>

@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { DashboardLayout } from "@/components/dashboard-layout"
 import { ActiveQuests } from "@/components/active-quests"
 import { QuickAdd } from "@/components/quick-add"
 import { SkillsList } from "@/components/skills-list"
@@ -201,7 +200,7 @@ export default function Page() {
           onStart={handleStartTracking}
         />
       ) : (
-        <DashboardLayout>
+        <>
           {isMobile ? (
             <div className="space-y-6" onClick={handleBackgroundClick}>
               <ActiveQuests />
@@ -228,7 +227,7 @@ export default function Page() {
               </div>
             </div>
           )}
-        </DashboardLayout>
+        </>
       )}
     </>
   )

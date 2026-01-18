@@ -15,6 +15,7 @@ import { DatabaseSync } from "@/components/database-sync"
 import { SystemGuide } from "@/components/system-guide"
 import { useRouter, usePathname, useSearchParams } from "next/navigation"
 import { useEffect } from "react"
+import Link from "next/link"
 
 const navigation = [
   { name: "Main", icon: LayoutDashboard },
@@ -135,35 +136,43 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         <p className="text-xs text-muted-foreground mt-1">TRACKER v1.0</p>
       </div>
       <nav className="flex-1 p-4 space-y-2">
-        {navigation.map((item) => (
-          <Button
-            key={item.name}
-            variant={activeNav === item.name ? "default" : "ghost"}
-            className="w-full justify-start transition-colors"
-            style={
-              activeNav === item.name
-                ? {
-                  backgroundColor: uiColor,
-                  color: "white",
+        {navigation.map((item) => {
+          const isActive = activeNav === item.name
+          const isShop = item.name === "Shop"
+          const href = isShop ? "/shop" : "/"
+
+          return (
+            <Button
+              key={item.name}
+              asChild
+              variant={isActive ? "default" : "ghost"}
+              className="w-full justify-start transition-colors"
+              style={
+                isActive
+                  ? {
+                    backgroundColor: uiColor,
+                    color: "white",
+                  }
+                  : undefined
+              }
+              onMouseEnter={(e) => {
+                if (!isActive) {
+                  e.currentTarget.style.backgroundColor = `${uiColor}33`
                 }
-                : undefined
-            }
-            onMouseEnter={(e) => {
-              if (activeNav !== item.name) {
-                e.currentTarget.style.backgroundColor = `${uiColor}33`
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (activeNav !== item.name) {
-                e.currentTarget.style.backgroundColor = "transparent"
-              }
-            }}
-            onClick={() => handleNavigation(item.name)}
-          >
-            <item.icon className="mr-3 h-4 w-4" />
-            {item.name}
-          </Button>
-        ))}
+              }}
+              onMouseLeave={(e) => {
+                if (!isActive) {
+                  e.currentTarget.style.backgroundColor = "transparent"
+                }
+              }}
+            >
+              <Link href={href} onClick={() => setActiveNav(item.name)}>
+                <item.icon className="mr-3 h-4 w-4" />
+                {item.name}
+              </Link>
+            </Button>
+          )
+        })}
       </nav>
       <div className="p-4 border-t border-sidebar-border">
         <Button

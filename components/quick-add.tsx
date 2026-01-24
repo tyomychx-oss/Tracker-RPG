@@ -48,7 +48,7 @@ export function QuickAdd() {
     const base = {
       id: Date.now(),
       title: taskName,
-      skill: taskSkill,
+      skill: taskSkill === "none" ? "" : taskSkill,
       xp: Number(taskXP || "25"),
       rating: taskPriority || "short",
       completed: false,
@@ -138,7 +138,7 @@ export function QuickAdd() {
               <Label htmlFor="task-skill" className="text-foreground">
                 Area
               </Label>
-              <Select value={taskSkill} onValueChange={setTaskSkill}>
+              <Select value={taskSkill || "none"} onValueChange={setTaskSkill}>
                 <SelectTrigger id="task-skill" className="bg-input">
                   <SelectValue placeholder="No area" />
                 </SelectTrigger>

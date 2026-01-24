@@ -314,7 +314,7 @@ export function ActiveQuests() {
                     <Zap className="h-3 w-3" />
                     +{(quest as any).reward || (quest.rating === "fast" ? 5 : quest.rating === "short" ? 10 : quest.rating === "deep" ? 25 : quest.rating === "hard" ? 50 : 0)}
                   </span>
-                  {quest.skill && (
+                  {quest.skill && quest.skill !== "none" && (
                     <Badge
                       variant="outline"
                       className="text-xs border"

@@ -28,6 +28,21 @@ export default function Page() {
 
   useEffect(() => {
     const checkAuth = async () => {
+      // First check if we already have a profile in localStorage
+      const storedProfile = localStorage.getItem("currentUserProfile")
+      if (storedProfile) {
+        try {
+          const profile = JSON.parse(storedProfile)
+          if (profile.nickname) {
+            // We have a valid cached profile, skip loading state
+            setIsCheckingAuth(false)
+            return
+          }
+        } catch (e) {
+          // Invalid cached data, continue with normal auth check
+        }
+      }
+
       const { createClient } = await import("@/utils/supabase/client")
       const supabase = createClient()
 

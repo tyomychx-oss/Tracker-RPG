@@ -283,7 +283,12 @@ function MobileRecentActivity() {
         ) : (
           activities.slice(0, 10).map((activity) => (
             <div key={activity.id} className="flex items-start justify-between text-sm gap-3">
-              <span className="text-foreground flex-1">{activity.action}</span>
+              <span
+                className="text-foreground flex-1 overflow-hidden text-ellipsis whitespace-nowrap"
+                style={{ maxWidth: 'min(25ch, calc(100vw - 180px))' }}
+              >
+                {activity.action}
+              </span>
               <div className="flex items-center gap-2 whitespace-nowrap">
                 {activity.xp !== undefined && activity.xp !== null && (
                   <span className="text-xs text-muted-foreground font-mono">

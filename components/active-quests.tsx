@@ -12,8 +12,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Pencil, ChevronDown, ChevronUp, Trash2, Plus, X, Zap } from "lucide-react"
-import { useXP, useAreaColors, useAreaFilter, useRecentActivity, useUIColor, useAreaXP, useQuests, useSparks } from "@/components/providers"
+import { Pencil, ChevronDown, ChevronUp, Trash2, Plus, X, Zap, Pin, PinOff, GripVertical } from "lucide-react"
+import { useXP, useAreaColors, useAreaFilter, useRecentActivity, useUIColor, useAreaXP, useQuests, useSparks, useAreas } from "@/components/providers"
 
 interface TaskStateSnapshot {
   questId: number
@@ -32,6 +32,7 @@ export function ActiveQuests() {
   const { addActivity } = useRecentActivity()
   const { uiColor } = useUIColor()
   const { addSparks, removeSparks } = useSparks() // Added
+  const { areas: availableAreas } = useAreas()
 
   const [showArchived, setShowArchived] = useState({
     plans: false,
@@ -57,6 +58,9 @@ export function ActiveQuests() {
 
   const [taskSnapshots, setTaskSnapshots] = useState<Record<number, TaskStateSnapshot>>({})
   const [isSnapshotsLoaded, setIsSnapshotsLoaded] = useState(false)
+
+  // Drag and drop state
+  const [draggedQuest, setDraggedQuest] = useState<{ id: number; category: "plans" | "dailies" | "habits" } | null>(null)
 
   // Load snapshots from localStorage
   useEffect(() => {
@@ -276,6 +280,40 @@ export function ActiveQuests() {
     addActivity(`Deleted: ${questTitle}`)
   }
 
+  const handleDragStart = (questId: number, category: "plans" | "dailies" | "habits") => {
+    setDraggedQuest({ id: questId, category })
+  }
+
+  const handleDragEnd = () => {
+    setDraggedQuest(null)
+  }
+
+  const handleDrop = (targetQuestId: number, category: "plans" | "dailies" | "habits") => {
+    if (!draggedQuest || draggedQuest.category !== category) return
+    if (draggedQuest.id === targetQuestId) return
+
+    const pinnedQuests = quests[category]
+      .filter((q: any) => q.pinned && q.archivedAt === null)
+      .sort((a: any, b: any) => (a.pinnedOrder ?? Infinity) - (b.pinnedOrder ?? Infinity))
+
+    const draggedIndex = pinnedQuests.findIndex((q: any) => q.id === draggedQuest.id)
+    const targetIndex = pinnedQuests.findIndex((q: any) => q.id === targetQuestId)
+
+    if (draggedIndex === -1 || targetIndex === -1) return
+
+    // Reorder pinned quests
+    const reordered = [...pinnedQuests]
+    const [removed] = reordered.splice(draggedIndex, 1)
+    reordered.splice(targetIndex, 0, removed)
+
+    // Update pinnedOrder for all reordered quests
+    reordered.forEach((quest: any, index: number) => {
+      updateQuest(category, quest.id, { pinnedOrder: index })
+    })
+
+    setDraggedQuest(null)
+  }
+
   const BASIC_COLORS = [
     "#ef4444", "#f97316", "#f59e0b", "#eab308", "#84cc16", "#10b981",
     "#059669", "#14b8a6", "#06b6d4", "#0ea5e9", "#3b82f6", "#a855f7",
@@ -287,56 +325,96 @@ export function ActiveQuests() {
       quest.rating === "fast" ? "border-l-lime-500"
         : quest.rating === "short" ? "border-l-cyan-400"
           : quest.rating === "deep" ? "border-l-amber-500"
-            : quest.rating === "hard" ? "border-l-red-500" // Added hard check
+            : quest.rating === "hard" ? "border-l-red-500"
               : "border-l-gray-300"
+
+    const priorityColor =
+      quest.rating === "fast" ? "#84cc16"
+        : quest.rating === "short" ? "#22d3ee"
+          : quest.rating === "deep" ? "#f59e0b"
+            : quest.rating === "hard" ? "#ef4444"
+              : "#d1d5db"
+
+    const isPinned = quest.pinned && !isArchived
 
     return (
       <Card
         key={quest.id}
-        className={`bg-card border-border border-l-4 ${priorityBorder} ${isArchived ? "opacity-50" : quest.completed ? "opacity-70" : ""}`}
+        className={`bg-card border-l-4 ${priorityBorder} ${isArchived ? "opacity-50" : quest.completed ? "opacity-70" : ""} ${isPinned ? "cursor-grab active:cursor-grabbing" : ""} ${draggedQuest?.id === quest.id ? "opacity-50" : ""}`}
+        style={isPinned ? { borderTopColor: 'var(--border)', borderRightColor: 'var(--border)', borderBottomColor: `${priorityColor}66`, borderLeftColor: priorityColor, borderWidth: '1px', borderLeftWidth: '4px' } : {}}
+        draggable={isPinned}
+        onDragStart={isPinned ? () => handleDragStart(quest.id, category) : undefined}
+        onDragEnd={isPinned ? handleDragEnd : undefined}
+        onDragOver={isPinned ? (e) => e.preventDefault() : undefined}
+        onDrop={isPinned ? () => handleDrop(quest.id, category) : undefined}
       >
-        <CardContent className="p-4">
-          <div className="flex items-start gap-3">
+        <CardContent className="p-2 pt-3 relative">
+          {!isArchived && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="absolute -top-4 left-[16px] h-4 w-4 p-0"
+              onClick={() => updateQuest(category, quest.id, { pinned: !quest.pinned, pinnedOrder: quest.pinned ? undefined : Date.now() })}
+            >
+              <Pin
+                className="h-3 w-3 rotate-45"
+                style={isPinned ? { color: uiColor, filter: `drop-shadow(0 0 4px ${uiColor})` } : { color: 'var(--muted-foreground)', opacity: 0.15 }}
+              />
+            </Button>
+          )}
+          <div className="flex items-center gap-3 ml-[6px] overflow-hidden">
             <Checkbox
               checked={quest.completed}
               onCheckedChange={() => {
                 handleToggleQuest(category, quest.id, quest.xp, quest.completed, quest.title, quest.skill)
               }}
-              className="mt-1 h-5 w-5 border border-gray-300"
+              className="h-5 w-5 border border-gray-300 flex-shrink-0"
               disabled={isArchived}
             />
-            <div className="flex-1 space-y-2">
-              <div className="flex items-start justify-between">
-                <h4 className="font-medium text-foreground">{quest.title}</h4>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground font-mono whitespace-nowrap">+{quest.xp} XP</span>
-                  <span className="text-xs text-orange-500 font-mono whitespace-nowrap flex items-center gap-0.5">
-                    <Zap className="h-3 w-3" />
-                    +{(quest as any).reward || (quest.rating === "fast" ? 5 : quest.rating === "short" ? 10 : quest.rating === "deep" ? 25 : quest.rating === "hard" ? 50 : 0)}
-                  </span>
+            <div className="flex-1 space-y-2 min-w-0">
+              <div className="flex items-center gap-2 overflow-hidden">
+                <h4 className="font-medium text-foreground flex-1 min-w-0" style={{ overflowWrap: 'break-word', wordBreak: 'break-word' }}>{quest.title}</h4>
+
+                {/* Right-side elements container - never shrinks */}
+                <div className="flex items-center gap-1 flex-shrink-0">
+
+                  {/* Rewards section - vertically stacked and centered */}
+                  <div className="flex flex-col items-end justify-center gap-0.5">
+                    <span className="text-xs text-muted-foreground font-mono whitespace-nowrap">+{quest.xp} XP</span>
+                    <span className="text-xs text-orange-500 font-mono whitespace-nowrap flex items-center gap-0.5">
+                      <Zap className="h-3 w-3" />
+                      +{(quest as any).reward || (quest.rating === "fast" ? 5 : quest.rating === "short" ? 10 : quest.rating === "deep" ? 25 : quest.rating === "hard" ? 50 : 0)}
+                    </span>
+                  </div>
+
+                  {/* Area badge - 4px gap from rewards */}
                   {quest.skill && quest.skill !== "none" && (
                     <Badge
                       variant="outline"
-                      className="text-xs border"
+                      className="text-xs border ml-1"
                       style={{
                         backgroundColor: `${skillColor}20`,
                         color: skillColor,
                         borderColor: skillColor,
-                        fontSize: "0.65rem",
-                        padding: "0.125rem 0.375rem",
+                        fontSize: "0.6rem",
+                        padding: "0.1rem 0.3rem",
                       }}
                     >
                       {quest.skill}
                     </Badge>
                   )}
+
+                  {/* Streak for habits - 4px gap */}
                   {category === "habits" && (
-                    <span className="text-xs flex items-center gap-1">
+                    <span className="text-xs flex items-center gap-1 ml-1">
                       <span>🔥</span>
                       {(quest as any).streak || 0}
                     </span>
                   )}
+
+                  {/* Edit/Delete buttons - 4px gap from previous element */}
                   {!isArchived && (
-                    <>
+                    <div className="flex items-center gap-1 opacity-50 ml-1">
                       <Button
                         size="sm"
                         variant="ghost"
@@ -353,7 +431,7 @@ export function ActiveQuests() {
                       >
                         <Trash2 className="h-3 w-3 text-foreground" />
                       </Button>
-                    </>
+                    </div>
                   )}
                 </div>
               </div>
@@ -385,14 +463,16 @@ export function ActiveQuests() {
               )}
 
               {quest.completed && !isArchived && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="w-full text-xs bg-transparent"
-                  onClick={() => handleArchiveQuest(category, quest.id, quest.title)}
-                >
-                  Archive
-                </Button>
+                <div className="absolute -bottom-3 left-0 right-0 flex justify-center">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-xs px-3 h-5 rounded-b-md rounded-t-none border-t border-border bg-transparent hover:bg-transparent hover:scale-105 transition-all text-muted-foreground hover:text-foreground"
+                    onClick={() => handleArchiveQuest(category, quest.id, quest.title)}
+                  >
+                    Archive
+                  </Button>
+                </div>
               )}
               {isArchived && (
                 <Button
@@ -421,6 +501,16 @@ export function ActiveQuests() {
         return isActive && selectedAreas.includes(q.skill)
       })
       .sort((a: any, b: any) => {
+        // Закріплені таски завжди зверху
+        if (a.pinned && !b.pinned) return -1
+        if (!a.pinned && b.pinned) return 1
+        // Серед закріплених - сортування за pinnedOrder
+        if (a.pinned && b.pinned) {
+          const orderA = a.pinnedOrder ?? Infinity
+          const orderB = b.pinnedOrder ?? Infinity
+          return orderA - orderB
+        }
+        // Для незакріплених - сортування за пріоритетом
         const pa = priorityOrder[a.rating] ?? 99
         const pb = priorityOrder[b.rating] ?? 99
         return pa - pb
@@ -515,17 +605,19 @@ export function ActiveQuests() {
                 <div className="space-y-2">
                   <Label htmlFor="skill">Area</Label>
                   <Select
-                    value={editingQuest.skill}
-                    onValueChange={(value) => setEditingQuest({ ...editingQuest, skill: value })}
+                    value={editingQuest.skill || "none"}
+                    onValueChange={(value) => setEditingQuest({ ...editingQuest, skill: value === "none" ? "" : value })}
                   >
                     <SelectTrigger id="skill" className="bg-input">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Branding">Branding</SelectItem>
-                      <SelectItem value="Sport">Sport</SelectItem>
-                      <SelectItem value="General">General</SelectItem>
-                      {/* Note: You can map available areas here if you have access to them */}
+                      <SelectItem value="none">No area</SelectItem>
+                      {(availableAreas || []).map((skill: string) => (
+                        <SelectItem key={skill} value={skill}>
+                          {skill}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>

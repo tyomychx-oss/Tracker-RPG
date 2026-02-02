@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -22,6 +22,58 @@ export function QuickAdd() {
   const [showSubtasks, setShowSubtasks] = useState(false)
   const [subtasks, setSubtasks] = useState<{ id: string; title: string; completed: boolean }[]>([])
 
+  const nameRef = useRef<HTMLInputElement | null>(null)
+
+  // Auto-save / restore draft so a full reload is less disruptive
+  const DRAFT_KEY = "quickAddDraft_v1"
+
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(DRAFT_KEY)
+      if (!raw) return
+      const draft = JSON.parse(raw)
+      if (draft?.taskName) setTaskName(draft.taskName)
+      if (draft?.taskType) setTaskType(draft.taskType)
+      if (draft?.taskSkill) setTaskSkill(draft.taskSkill)
+      if (draft?.taskXP) setTaskXP(draft.taskXP)
+      if (draft?.taskPriority) setTaskPriority(draft.taskPriority)
+      if (draft?.dailyCount) setDailyCount(draft.dailyCount)
+      if (draft?.dailyPeriodDays) setDailyPeriodDays(draft.dailyPeriodDays)
+      if (draft?.dailyResetTime) setDailyResetTime(draft.dailyResetTime)
+      if (draft?.showSubtasks) setShowSubtasks(draft.showSubtasks)
+      if (Array.isArray(draft?.subtasks)) setSubtasks(draft.subtasks)
+
+      // restore focus and caret to name input
+      setTimeout(() => {
+        try {
+          const el = nameRef.current
+          if (el) {
+            el.focus()
+            const len = el.value.length
+            el.setSelectionRange(len, len)
+          }
+        } catch { }
+      }, 10)
+    } catch { }
+  }, [])
+
+  useEffect(() => {
+    try {
+      const draft = {
+        taskName,
+        taskType,
+        taskSkill,
+        taskXP,
+        taskPriority,
+        dailyCount,
+        dailyPeriodDays,
+        dailyResetTime,
+        showSubtasks,
+        subtasks,
+      }
+      sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft))
+    } catch { }
+  }, [taskName, taskType, taskSkill, taskXP, taskPriority, dailyCount, dailyPeriodDays, dailyResetTime, showSubtasks, subtasks])
   const { activities } = useRecentActivity()
   const { uiColor } = useUIColor()
   const { addQuest } = useQuests()
@@ -54,7 +106,7 @@ export function QuickAdd() {
       completed: false,
       archivedAt: null,
       lastCompletedDate: null,
-
+      pinned: false,
       subtasks: showSubtasks ? subtasks.filter(s => s.title.trim() !== "") : [],
       reward: taskPriority === "fast" ? 5 :
         taskPriority === "short" ? 10 :
@@ -81,6 +133,9 @@ export function QuickAdd() {
     setTaskXP("25")
     setShowSubtasks(false)
     setSubtasks([])
+    try {
+      sessionStorage.removeItem(DRAFT_KEY)
+    } catch { }
   }
 
   const formatTimestamp = (timestamp: number) => {
@@ -111,9 +166,11 @@ export function QuickAdd() {
             <Input
               id="task-name"
               placeholder="Enter task name..."
+              ref={(el) => (nameRef.current = el)}
               value={taskName}
               onChange={(e) => setTaskName(e.target.value)}
               className="bg-input"
+              autoComplete="off"
             />
           </div>
 
@@ -340,7 +397,12 @@ export function QuickAdd() {
           ) : (
             activities.slice(0, 10).map((activity) => (
               <div key={activity.id} className="flex items-start justify-between text-sm gap-3">
-                <span className="text-foreground flex-1">{activity.action}</span>
+                <span
+                  className="text-foreground flex-1 overflow-hidden text-ellipsis whitespace-nowrap"
+                  style={{ maxWidth: 'min(25ch, calc(100vw - 180px))' }}
+                >
+                  {activity.action}
+                </span>
                 <div className="flex items-center gap-2 whitespace-nowrap">
                   {activity.xp && (
                     <span className="text-xs text-muted-foreground font-mono">

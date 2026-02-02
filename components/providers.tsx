@@ -58,6 +58,8 @@ export interface Quest {
     completed: boolean
   }[]
   reward?: number
+  pinned?: boolean
+  pinnedOrder?: number
 }
 
 export interface QuestsContextType {

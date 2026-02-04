@@ -59,10 +59,15 @@ function ShopContent() {
     const { rewards, isLoading } = useShop()
     const { sparks } = useSparks()
 
+    // Debug: Log all rewards to see what's being returned
+    console.log("All Shop Rewards:", rewards.map(r => ({ id: r.id, title: r.title, is_on_market: r.is_on_market })))
+
     // Сортуємо: спочатку дорогі
     const marketRewards = rewards
         .filter(r => r.is_on_market)
         .sort((a, b) => b.cost - a.cost)
+
+    console.log("Filtered Market Rewards:", marketRewards.length, marketRewards.map(r => r.title))
 
     return (
         <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
@@ -81,7 +86,7 @@ function ShopContent() {
                     <span className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Balance</span>
                     <div className="flex items-center gap-2">
                         <Zap className="h-6 w-6 text-orange-500 fill-orange-500 animate-pulse" />
-                        <span className="text-3xl font-mono font-bold text-orange-500">{sparks}</span>
+                        <span className="text-3xl font-mono font-bold text-orange-500" suppressHydrationWarning>{sparks}</span>
                     </div>
                 </div>
             </header>

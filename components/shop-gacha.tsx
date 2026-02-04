@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { useShop } from "@/components/shop-provider"
 import { useUIColor, useSparks } from "@/components/providers"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Loader2, Sparkles, Trophy, Settings2 } from "lucide-react"
@@ -87,10 +87,7 @@ export function ShopGacha() {
             {/* Main Gacha Card */}
             <div className="relative overflow-hidden rounded-xl border border-border bg-card p-6 md:p-10 text-center">
                 {/* Ambient Glow */}
-                <div
-                    className="absolute inset-0 opacity-10 blur-3xl"
-                    style={{ background: `radial-gradient(circle at center, ${uiColor}, transparent 70%)` }}
-                />
+                <div className="absolute inset-0 opacity-10 blur-3xl bg-gradient-radial from-orange-500 to-transparent" />
 
                 <div className="relative z-10 flex flex-col items-center gap-6">
                     {/* Roulette Window */}
@@ -187,6 +184,7 @@ export function ShopGacha() {
                         <DialogTitle className="text-center text-3xl font-bold text-yellow-500">
                             FATE HAS SPOKEN!
                         </DialogTitle>
+                        <DialogDescription className="sr-only">Your spin result</DialogDescription>
                     </DialogHeader>
                     <div className="flex flex-col items-center py-8 space-y-6">
                         <div className="h-24 w-24 rounded-full bg-yellow-500/20 flex items-center justify-center animate-bounce">
@@ -305,6 +303,7 @@ function PoolManager() {
             <DialogContent className="sm:max-w-lg bg-card border-border">
                 <DialogHeader>
                     <DialogTitle>Manage Fate Pool</DialogTitle>
+                    <DialogDescription className="sr-only">Configure which rewards appear in the wheel</DialogDescription>
                 </DialogHeader>
                 <div className="max-h-[400px] overflow-y-auto space-y-2 py-4">
                     {rewards.length === 0 ? (

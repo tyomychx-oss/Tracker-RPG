@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { useToast } from "@/components/ui/use-toast"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -138,7 +138,16 @@ export function ShopManageDialog({ trigger, data, isEditing = false }: ShopManag
                 {trigger ? (
                     trigger
                 ) : (
-                    <Button className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground min-w-[140px]">
+                    <Button
+                        className="w-full sm:w-auto text-white hover:opacity-90 min-w-[140px] transition-all duration-300 hover:scale-105"
+                        style={{ backgroundColor: uiColor }}
+                        onMouseEnter={(e) => {
+                            (e.target as HTMLElement).style.boxShadow = `0 0 15px ${uiColor}80`
+                        }}
+                        onMouseLeave={(e) => {
+                            (e.target as HTMLElement).style.boxShadow = ''
+                        }}
+                    >
                         <Plus className="mr-2 h-4 w-4" /> Add Reward
                     </Button>
                 )}
@@ -146,6 +155,7 @@ export function ShopManageDialog({ trigger, data, isEditing = false }: ShopManag
             <DialogContent className="bg-card border-border sm:max-w-md max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle>{isEditing ? "Edit Reward" : "Create New Reward"}</DialogTitle>
+                    <DialogDescription className="sr-only">Manage your shop rewards</DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4 py-4">
                     <div className="space-y-2">

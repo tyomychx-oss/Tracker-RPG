@@ -6,7 +6,7 @@ import { SettingsPage } from "@/components/settings-page"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { LayoutDashboard, Zap, BarChart3, Settings, LogOut, Menu, Bot, User, Medal, Crown, BookOpen, Store } from "lucide-react"
-import { useState } from "react"
+import { useState, useEffect as useEffectReact } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { useNickname, useUIColor, useXP, useSkills, useSkillXP, useSkillColors, useRecentActivity, useQuests, useSparks } from "@/components/providers"
@@ -30,6 +30,12 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const [activeNav, setActiveNav] = useState("Main")
+  const [mounted, setMounted] = useState(false)
+
+  // Fix hydration mismatch for Sheet component
+  useEffectReact(() => {
+    setMounted(true)
+  }, [])
 
   // Sync active state with URL
   useEffect(() => {
@@ -215,16 +221,22 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         <header className="bg-card border-b border-border px-4 py-4 md:px-8">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-4">
-              <Sheet>
-                <SheetTrigger asChild>
-                  <Button variant="ghost" size="icon" className="md:hidden">
-                    <Menu className="h-6 w-6" />
-                  </Button>
-                </SheetTrigger>
-                <SheetContent side="left" className="p-0 w-64 bg-sidebar border-r border-sidebar-border">
-                  <SidebarContent />
-                </SheetContent>
-              </Sheet>
+              {mounted ? (
+                <Sheet>
+                  <SheetTrigger asChild>
+                    <Button variant="ghost" size="icon" className="md:hidden">
+                      <Menu className="h-6 w-6" />
+                    </Button>
+                  </SheetTrigger>
+                  <SheetContent side="left" className="p-0 w-64 bg-sidebar border-r border-sidebar-border">
+                    <SidebarContent />
+                  </SheetContent>
+                </Sheet>
+              ) : (
+                <Button variant="ghost" size="icon" className="md:hidden">
+                  <Menu className="h-6 w-6" />
+                </Button>
+              )}
               {(() => {
                 const cfg = getLevelConfig(currentLevel)
                 const Icon = cfg.icon

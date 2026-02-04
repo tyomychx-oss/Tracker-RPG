@@ -192,10 +192,11 @@ export function SkillsListEditable() {
                           e.stopPropagation()
                           archiveArea(skill.name)
                         }}
-                        className="h-8 w-8 p-0 hover:bg-secondary"
+                        className="group h-8 w-8 p-0 bg-transparent hover:bg-transparent transition-transform hover:scale-105"
                         aria-label="Archive"
+                        title="Archive"
                       >
-                        <Archive className="h-4 w-4 text-white" />
+                        <Archive className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors" />
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>Archive</TooltipContent>

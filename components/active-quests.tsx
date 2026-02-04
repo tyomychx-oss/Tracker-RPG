@@ -12,8 +12,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Pencil, ChevronDown, ChevronUp, Trash2, Plus, X, Zap } from "lucide-react"
-import { useXP, useAreaColors, useAreaFilter, useRecentActivity, useUIColor, useAreaXP, useQuests, useSparks } from "@/components/providers"
+import { Pencil, ChevronDown, ChevronUp, Trash2, Plus, X, Zap, Pin, PinOff, GripVertical } from "lucide-react"
+import { useXP, useAreaColors, useAreaFilter, useRecentActivity, useUIColor, useAreaXP, useQuests, useSparks, useAreas } from "@/components/providers"
 
 interface TaskStateSnapshot {
   questId: number
@@ -32,6 +32,7 @@ export function ActiveQuests() {
   const { addActivity } = useRecentActivity()
   const { uiColor } = useUIColor()
   const { addSparks, removeSparks } = useSparks() // Added
+  const { areas: availableAreas } = useAreas()
 
   const [showArchived, setShowArchived] = useState({
     plans: false,
@@ -57,6 +58,9 @@ export function ActiveQuests() {
 
   const [taskSnapshots, setTaskSnapshots] = useState<Record<number, TaskStateSnapshot>>({})
   const [isSnapshotsLoaded, setIsSnapshotsLoaded] = useState(false)
+
+  // Drag and drop state
+  const [draggedQuest, setDraggedQuest] = useState<{ id: number; category: "plans" | "dailies" | "habits" } | null>(null)
 
   // Load snapshots from localStorage
   useEffect(() => {
@@ -276,6 +280,40 @@ export function ActiveQuests() {
     addActivity(`Deleted: ${questTitle}`)
   }
 
+  const handleDragStart = (questId: number, category: "plans" | "dailies" | "habits") => {
+    setDraggedQuest({ id: questId, category })
+  }
+
+  const handleDragEnd = () => {
+    setDraggedQuest(null)
+  }
+
+  const handleDrop = (targetQuestId: number, category: "plans" | "dailies" | "habits") => {
+    if (!draggedQuest || draggedQuest.category !== category) return
+    if (draggedQuest.id === targetQuestId) return
+
+    const pinnedQuests = quests[category]
+      .filter((q: any) => q.pinned && q.archivedAt === null)
+      .sort((a: any, b: any) => (a.pinnedOrder ?? Infinity) - (b.pinnedOrder ?? Infinity))
+
+    const draggedIndex = pinnedQuests.findIndex((q: any) => q.id === draggedQuest.id)
+    const targetIndex = pinnedQuests.findIndex((q: any) => q.id === targetQuestId)
+
+    if (draggedIndex === -1 || targetIndex === -1) return
+
+    // Reorder pinned quests
+    const reordered = [...pinnedQuests]
+    const [removed] = reordered.splice(draggedIndex, 1)
+    reordered.splice(targetIndex, 0, removed)
+
+    // Update pinnedOrder for all reordered quests
+    reordered.forEach((quest: any, index: number) => {
+      updateQuest(category, quest.id, { pinnedOrder: index })
+    })
+
+    setDraggedQuest(null)
+  }
+
   const BASIC_COLORS = [
     "#ef4444", "#f97316", "#f59e0b", "#eab308", "#84cc16", "#10b981",
     "#059669", "#14b8a6", "#06b6d4", "#0ea5e9", "#3b82f6", "#a855f7",
@@ -287,78 +325,122 @@ export function ActiveQuests() {
       quest.rating === "fast" ? "border-l-lime-500"
         : quest.rating === "short" ? "border-l-cyan-400"
           : quest.rating === "deep" ? "border-l-amber-500"
-            : quest.rating === "hard" ? "border-l-red-500" // Added hard check
+            : quest.rating === "hard" ? "border-l-red-500"
               : "border-l-gray-300"
 
-    return (
-      <Card
-        key={quest.id}
-        className={`bg-card border-border border-l-4 ${priorityBorder} ${isArchived ? "opacity-50" : quest.completed ? "opacity-70" : ""}`}
-      >
-        <CardContent className="p-4">
-          <div className="flex items-start gap-3">
-            <Checkbox
-              checked={quest.completed}
-              onCheckedChange={() => {
-                handleToggleQuest(category, quest.id, quest.xp, quest.completed, quest.title, quest.skill)
-              }}
-              className="mt-1 h-5 w-5 border border-gray-300"
-              disabled={isArchived}
-            />
-            <div className="flex-1 space-y-2">
-              <div className="flex items-start justify-between">
-                <h4 className="font-medium text-foreground">{quest.title}</h4>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground font-mono whitespace-nowrap">+{quest.xp} XP</span>
-                  <span className="text-xs text-orange-500 font-mono whitespace-nowrap flex items-center gap-0.5">
-                    <Zap className="h-3 w-3" />
-                    +{(quest as any).reward || (quest.rating === "fast" ? 5 : quest.rating === "short" ? 10 : quest.rating === "deep" ? 25 : quest.rating === "hard" ? 50 : 0)}
-                  </span>
-                  {quest.skill && (
-                    <Badge
-                      variant="outline"
-                      className="text-xs border"
-                      style={{
-                        backgroundColor: `${skillColor}20`,
-                        color: skillColor,
-                        borderColor: skillColor,
-                        fontSize: "0.65rem",
-                        padding: "0.125rem 0.375rem",
-                      }}
-                    >
-                      {quest.skill}
-                    </Badge>
-                  )}
-                  {category === "habits" && (
-                    <span className="text-xs flex items-center gap-1">
-                      <span>🔥</span>
-                      {(quest as any).streak || 0}
-                    </span>
-                  )}
-                  {!isArchived && (
-                    <>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-6 w-6 p-0 hover:bg-primary/20"
-                        onClick={() => handleEditQuest(quest, category)}
-                      >
-                        <Pencil className="h-3 w-3" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-6 w-6 p-0 hover:bg-destructive/20"
-                        onClick={() => handleDeleteQuest(category, quest.id, quest.title)}
-                      >
-                        <Trash2 className="h-3 w-3 text-foreground" />
-                      </Button>
-                    </>
-                  )}
-                </div>
-              </div>
+    const priorityColor =
+      quest.rating === "fast" ? "#84cc16"
+        : quest.rating === "short" ? "#22d3ee"
+          : quest.rating === "deep" ? "#f59e0b"
+            : quest.rating === "hard" ? "#ef4444"
+              : "#d1d5db"
 
-              {/* Subtasks rendering */}
+    const isPinned = quest.pinned && !isArchived
+    const hasCategory = !!(quest.skill && quest.skill !== "none")
+
+    return (
+      <div
+        key={quest.id}
+        className={`${isArchived ? "opacity-50" : quest.completed ? "opacity-70" : ""} ${isPinned ? "cursor-grab active:cursor-grabbing" : ""} ${draggedQuest?.id === quest.id ? "opacity-50" : ""}`}
+        draggable={isPinned}
+        onDragStart={isPinned ? () => handleDragStart(quest.id, category) : undefined}
+        onDragEnd={isPinned ? handleDragEnd : undefined}
+        onDragOver={isPinned ? (e) => e.preventDefault() : undefined}
+        onDrop={isPinned ? () => handleDrop(quest.id, category) : undefined}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = `linear-gradient(to bottom, ${priorityColor}cc, ${priorityColor}44)`
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = `linear-gradient(to bottom, ${priorityColor}88, ${priorityColor}22)`
+        }}
+        style={{
+          padding: "1px",
+          borderRadius: "16px",
+          background: `linear-gradient(to bottom, ${priorityColor}88, ${priorityColor}22)`,
+          transition: "all 0.4s ease",
+        }}
+      >
+        <div
+          style={{
+            borderRadius: "15px",
+            background: "linear-gradient(to right, rgba(24,24,38,0.95), rgba(14,14,22,0.98))",
+            padding: "16px 20px",
+            position: "relative",
+          }}
+        >
+          {/* Left Accent Bar */}
+          <div style={{
+            position: "absolute",
+            left: 0,
+            top: "8px",
+            bottom: "8px",
+            width: "3px",
+            borderRadius: "0 3px 3px 0",
+            background: priorityColor,
+            opacity: 0.7
+          }} />
+
+          <div style={{ display: "flex", alignItems: "flex-start", gap: "12px" }}>
+            {/* Pin icon - positioned relative to checkbox */}
+            <div style={{ position: "relative", flexShrink: 0, marginTop: hasCategory ? "12px" : "0px" }}>
+              {!isArchived && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-4 w-4 p-0"
+                  style={{
+                    position: "absolute",
+                    top: "-18px",
+                    left: "-18px",
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    updateQuest(category, quest.id, { pinned: !quest.pinned, pinnedOrder: quest.pinned ? undefined : Date.now() })
+                  }}
+                >
+                  <Pin
+                    className="h-3 w-3 rotate-45"
+                    style={isPinned ? { color: uiColor, filter: `drop-shadow(0 0 4px ${uiColor})` } : { color: 'var(--muted-foreground)', opacity: 0.15 }}
+                  />
+                </Button>
+              )}
+
+              <Checkbox
+                checked={quest.completed}
+                onCheckedChange={() => {
+                  handleToggleQuest(category, quest.id, quest.xp, quest.completed, quest.title, quest.skill)
+                }}
+                className="h-5 w-5 border border-gray-300"
+                disabled={isArchived}
+              />
+            </div>
+
+            {/* Title - takes all remaining space */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              {/* Category label */}
+              {quest.skill && quest.skill !== "none" && (
+                <div
+                  style={{
+                    fontSize: "11px",
+                    color: `${priorityColor}99`,
+                    fontFamily: "'Crimson Pro', serif",
+                    letterSpacing: "0.12em",
+                    textTransform: "uppercase",
+                    fontStyle: "italic",
+                    lineHeight: "1",
+                    marginBottom: "2px"
+                  }}
+                >
+                  — {quest.skill} quest
+                </div>
+              )}
+
+              {/* Quest Title */}
+              <h4 className="font-medium text-foreground" style={{ overflowWrap: 'break-word', wordBreak: 'break-word' }}>
+                {quest.title}
+              </h4>
+
+              {/* Subtasks - nested inside title block to stay in one row */}
               {quest.subtasks && quest.subtasks.length > 0 && (
                 <div className="space-y-1 mt-2">
                   {quest.subtasks.map((subtask: any) => (
@@ -384,30 +466,107 @@ export function ActiveQuests() {
                 </div>
               )}
 
+              {/* Archive Button for Completed Tasks */}
               {quest.completed && !isArchived && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="w-full text-xs bg-transparent"
-                  onClick={() => handleArchiveQuest(category, quest.id, quest.title)}
-                >
-                  Archive
-                </Button>
+                <div style={{ paddingTop: "8px" }}>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleArchiveQuest(category, quest.id, quest.title)
+                    }}
+                    style={{
+                      padding: "8px 28px",
+                      borderRadius: "6px",
+                      border: `1px solid ${priorityColor}30`,
+                      background: "transparent",
+                      color: priorityColor,
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      fontFamily: "'Crimson Pro', serif",
+                      letterSpacing: "0.1em",
+                      textTransform: "uppercase",
+                      fontStyle: "italic",
+                      width: "100%",
+                      cursor: "pointer",
+                      transition: "all 0.25s ease",
+                    }}
+                  >
+                    Archive Quest
+                  </button>
+                </div>
               )}
+
               {isArchived && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="w-full text-xs bg-transparent"
-                  onClick={() => handleUnarchiveQuest(category, quest.id, quest.xp, quest.skill)}
-                >
-                  Unarchive
-                </Button>
+                <div style={{ paddingTop: "8px" }}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full text-xs bg-transparent"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleUnarchiveQuest(category, quest.id, quest.xp, quest.skill)
+                    }}
+                  >
+                    Unarchive
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            {/* XP + Sparks stacked */}
+            <div style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "flex-end",
+              justifyContent: "center",
+              flexShrink: 0,
+              marginTop: hasCategory ? "6px" : "0px"
+            }}>
+              <span className="text-xs text-muted-foreground font-mono whitespace-nowrap">+{quest.xp} XP</span>
+              <span className="text-xs text-orange-500 font-mono whitespace-nowrap flex items-center gap-0.5">
+                <Zap className="h-3 w-3" />
+                +{(quest as any).reward || (quest.rating === "fast" ? 5 : quest.rating === "short" ? 10 : quest.rating === "deep" ? 25 : quest.rating === "hard" ? 50 : 0)}
+              </span>
+            </div>
+
+            {/* Edit + Delete + Habit Streak */}
+            <div className="flex items-center gap-1 opacity-50 flex-shrink-0 ml-1" style={{ marginTop: hasCategory ? "12px" : "0px" }}>
+              {!isArchived && (
+                <>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 w-6 p-0 hover:bg-primary/20"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleEditQuest(quest, category)
+                    }}
+                  >
+                    <Pencil className="h-3 w-3" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 w-6 p-0 hover:bg-destructive/20"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleDeleteQuest(category, quest.id, quest.title)
+                    }}
+                  >
+                    <Trash2 className="h-3 w-3 text-foreground" />
+                  </Button>
+                </>
+              )}
+              {category === "habits" && (
+                <span className="text-xs flex items-center gap-1 ml-1 opacity-100">
+                  <span>🔥</span>
+                  {(quest as any).streak || 0}
+                </span>
               )}
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div >
     )
   }
 
@@ -421,6 +580,16 @@ export function ActiveQuests() {
         return isActive && selectedAreas.includes(q.skill)
       })
       .sort((a: any, b: any) => {
+        // Закріплені таски завжди зверху
+        if (a.pinned && !b.pinned) return -1
+        if (!a.pinned && b.pinned) return 1
+        // Серед закріплених - сортування за pinnedOrder
+        if (a.pinned && b.pinned) {
+          const orderA = a.pinnedOrder ?? Infinity
+          const orderB = b.pinnedOrder ?? Infinity
+          return orderA - orderB
+        }
+        // Для незакріплених - сортування за пріоритетом
         const pa = priorityOrder[a.rating] ?? 99
         const pb = priorityOrder[b.rating] ?? 99
         return pa - pb
@@ -515,17 +684,19 @@ export function ActiveQuests() {
                 <div className="space-y-2">
                   <Label htmlFor="skill">Area</Label>
                   <Select
-                    value={editingQuest.skill}
-                    onValueChange={(value) => setEditingQuest({ ...editingQuest, skill: value })}
+                    value={editingQuest.skill || "none"}
+                    onValueChange={(value) => setEditingQuest({ ...editingQuest, skill: value === "none" ? "" : value })}
                   >
                     <SelectTrigger id="skill" className="bg-input">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Branding">Branding</SelectItem>
-                      <SelectItem value="Sport">Sport</SelectItem>
-                      <SelectItem value="General">General</SelectItem>
-                      {/* Note: You can map available areas here if you have access to them */}
+                      <SelectItem value="none">No area</SelectItem>
+                      {(availableAreas || []).map((skill: string) => (
+                        <SelectItem key={skill} value={skill}>
+                          {skill}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>

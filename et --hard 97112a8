@@ -1,0 +1,25 @@
+[33m7e0310d[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;33mtag: [m[1;33mv1.2[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Release v1.2: Fix auth refresh and bugs
+[33m97112a8[m Fix: Build success - Wrapped Layout in Suspense
+[33mdf43fad[m Fix: shop activity
+[33mc6a6071[m Fix: Implemented SPA navigation with Suspense and Layout refactor
+[33m4ef7663[m Fix TypeScript definition for ShopReward
+[33mb27d34d[m Shop
+[33md59062b[m new logo
+[33md374ca8[m logo
+[33m5f758be[m langu sign
+[33m547322d[m with sign
+[33m4bf355a[m Last finnaly update
+[33m051d1db[m for phone
+[33m6365b66[m 07.01 bez info
+[33m7c3f7c0[m New changes 06.01
+[33mf22a7bd[m New changes 06.
+[33m1e4beb8[m 423543532
+[33mfe6d0ae[m 32423
+[33m65e1ae7[m Merge branch 'main' of https://github.com/tyomychx-oss/Tracker-RPG
+[33m02b6fa8[m New 04.01
+[33m46c4475[m New 04.01
+[33mb1fd903[m Change name
+[33m59b50db[m pochti gotov do first test
+[33m04718c9[m new data and charts
+[33m4e2923f[m Added db table and sync
+[33m9bccd18[m First commit

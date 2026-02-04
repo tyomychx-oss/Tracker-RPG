@@ -62,6 +62,8 @@ export function DatabaseSync() {
           ui_color: uiColor,
           sparks,
           updated_at: new Date().toISOString(),
+        }, {
+          onConflict: 'user_id'
         })
 
       if (error) {

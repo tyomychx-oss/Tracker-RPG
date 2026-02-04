@@ -61,6 +61,40 @@ export default function SignInPage() {
         }
       } catch {}
 
+      // Завантажуємо профіль з Supabase і зберігаємо в localStorage
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session) {
+          const { data: profile } = await supabase
+            .from("user_profiles")
+            .select("*")
+            .eq("user_id", session.user.id)
+            .single()
+
+          if (profile) {
+            const userProfile = {
+              nickname: profile.nickname || "",
+              totalXP: profile.total_xp || 0,
+              currentLevel: profile.current_level || 1,
+              maxXP: profile.max_xp || 200,
+              sparks: profile.sparks || 0,
+              skillXPs: profile.skill_xps || {},
+              skillColors: profile.skill_colors || {},
+              quests: profile.quests || { plans: [], dailies: [], habits: [] },
+              activities: profile.activities || [],
+              uiColor: profile.ui_color || "#de6550",
+              archivedAreas: profile.archived_areas || [],
+            }
+            localStorage.setItem("currentUserProfile", JSON.stringify(userProfile))
+            if (profile.nickname) {
+              localStorage.setItem(`userProfile_${profile.nickname}`, JSON.stringify(userProfile))
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Failed to sync profile from server:", err)
+      }
+
       router.push("/")
       router.refresh()
     } catch (err) {

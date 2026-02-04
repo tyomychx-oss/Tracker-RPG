@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
+import { createContext, useContext, useState, useEffect, useRef, type ReactNode } from "react"
 import { ShopProvider } from "@/components/shop-provider"
 
 // --- Interfaces ---
@@ -255,27 +255,8 @@ export function XPProvider({ children }: { children: ReactNode }) {
     maxXP: 200,
   })
   const [isLoaded, setIsLoaded] = useState(false)
+  const hasUserMadeChanges = useRef(false)
 
-  useEffect(() => {
-    async function fetchFromDB() {
-      const { createClient } = await import("@/utils/supabase/client");
-      const supabase = createClient();
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return setIsLoaded(true);
-      const { data } = await supabase
-        .from("user_profiles")
-        .select("total_xp,current_level,max_xp")
-        .eq("user_id", session.user.id)
-        .single();
-      if (data) {
-        setXPState((prev) => ({ ...prev, totalXP: data.total_xp || 0 }));
-        setXPState((prev) => ({ ...prev, currentLevel: data.current_level || 1 }));
-        setXPState((prev) => ({ ...prev, maxXP: data.max_xp || 200 }));
-      }
-      setIsLoaded(true);
-    }
-    fetchFromDB();
-  }, [])
 
   useEffect(() => {
     if (!isLoaded) return
@@ -376,6 +357,7 @@ export function XPProvider({ children }: { children: ReactNode }) {
   const accumulatedXP = calculateTotalXP(xpState.currentLevel, xpState.totalXP, xpState.maxXP)
 
   const addXP = (amount: number) => {
+    hasUserMadeChanges.current = true
     setXPState((prev) => {
       const totalXPBefore = calculateTotalXP(prev.currentLevel, prev.totalXP, prev.maxXP)
       const totalXPAfter = totalXPBefore + amount
@@ -389,6 +371,7 @@ export function XPProvider({ children }: { children: ReactNode }) {
   }
 
   const removeXP = (amount: number) => {
+    hasUserMadeChanges.current = true
     setXPState((prev) => {
       const totalXPBefore = calculateTotalXP(prev.currentLevel, prev.totalXP, prev.maxXP)
       const totalXPAfter = Math.max(0, totalXPBefore - amount)
@@ -402,6 +385,7 @@ export function XPProvider({ children }: { children: ReactNode }) {
   }
 
   const resetXP = () => {
+    hasUserMadeChanges.current = true
     setXPState({
       totalXP: 0,
       currentLevel: 1,
@@ -410,6 +394,7 @@ export function XPProvider({ children }: { children: ReactNode }) {
   }
 
   const restorePreviousState = (previousLevel: number, previousXP: number, previousMaxXP: number) => {
+    hasUserMadeChanges.current = true
     setXPState({
       currentLevel: previousLevel,
       totalXP: previousXP,
@@ -440,21 +425,13 @@ export function AreaXPProvider({ children }: { children: ReactNode }) {
   const [isLoaded, setIsLoaded] = useState(false)
 
   useEffect(() => {
-    async function fetchAreaXPs() {
-      const { createClient } = await import("@/utils/supabase/client");
-      const supabase = createClient();
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return setIsLoaded(true);
-      const { data } = await supabase
-        .from("user_profiles")
-        .select("skill_xps")
-        .eq("user_id", session.user.id)
-        .single();
-      if (data) setAreaXPs(data.skill_xps || {});
-      setIsLoaded(true);
+    const storedProfile = localStorage.getItem("currentUserProfile")
+    if (storedProfile) {
+      const profile = JSON.parse(storedProfile)
+      setAreaXPs(profile.skillXPs || {})
     }
-    fetchAreaXPs();
-  }, []);
+    setIsLoaded(true)
+  }, [])
 
   useEffect(() => {
     if (!isLoaded) return
@@ -499,21 +476,13 @@ export function AreaColorsProvider({ children }: { children: ReactNode }) {
   const [isLoaded, setIsLoaded] = useState(false)
 
   useEffect(() => {
-    async function fetchAreaColors() {
-      const { createClient } = await import("@/utils/supabase/client");
-      const supabase = createClient();
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return setIsLoaded(true);
-      const { data } = await supabase
-        .from("user_profiles")
-        .select("skill_colors")
-        .eq("user_id", session.user.id)
-        .single();
-      if (data) setAreaColors(data.skill_colors || {});
-      setIsLoaded(true);
+    const storedProfile = localStorage.getItem("currentUserProfile")
+    if (storedProfile) {
+      const profile = JSON.parse(storedProfile)
+      setAreaColors(profile.skillColors || {})
     }
-    fetchAreaColors();
-  }, []);
+    setIsLoaded(true)
+  }, [])
 
   useEffect(() => {
     if (!isLoaded) return
@@ -563,21 +532,13 @@ export function QuestsProvider({ children }: { children: ReactNode }) {
   const [isLoaded, setIsLoaded] = useState(false)
 
   useEffect(() => {
-    async function fetchQuests() {
-      const { createClient } = await import("@/utils/supabase/client");
-      const supabase = createClient();
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return setIsLoaded(true);
-      const { data } = await supabase
-        .from("user_profiles")
-        .select("quests")
-        .eq("user_id", session.user.id)
-        .single();
-      if (data && data.quests) setQuests(data.quests);
-      setIsLoaded(true);
+    const storedProfile = localStorage.getItem("currentUserProfile")
+    if (storedProfile) {
+      const profile = JSON.parse(storedProfile)
+      if (profile.quests) setQuests(profile.quests)
     }
-    fetchQuests();
-  }, []);
+    setIsLoaded(true)
+  }, [])
 
   useEffect(() => {
     if (!isLoaded) return
@@ -639,21 +600,13 @@ export function RecentActivityProvider({ children }: { children: ReactNode }) {
   const [isLoaded, setIsLoaded] = useState(false)
 
   useEffect(() => {
-    async function fetchActivities() {
-      const { createClient } = await import("@/utils/supabase/client");
-      const supabase = createClient();
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return setIsLoaded(true);
-      const { data } = await supabase
-        .from("user_profiles")
-        .select("activities")
-        .eq("user_id", session.user.id)
-        .single();
-      if (data) setActivities(data.activities || []);
-      setIsLoaded(true);
+    const storedProfile = localStorage.getItem("currentUserProfile")
+    if (storedProfile) {
+      const profile = JSON.parse(storedProfile)
+      setActivities(profile.activities || [])
     }
-    fetchActivities();
-  }, []);
+    setIsLoaded(true)
+  }, [])
 
   useEffect(() => {
     if (!isLoaded) return
@@ -709,20 +662,12 @@ export function SparksProvider({ children }: { children: ReactNode }) {
   const [isLoaded, setIsLoaded] = useState(false)
 
   useEffect(() => {
-    async function fetchSparks() {
-      const { createClient } = await import("@/utils/supabase/client");
-      const supabase = createClient();
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return setIsLoaded(true);
-      const { data } = await supabase
-        .from("user_profiles")
-        .select("sparks")
-        .eq("user_id", session.user.id)
-        .single();
-      if (data) setSparks(data.sparks || 0);
-      setIsLoaded(true);
+    const storedProfile = localStorage.getItem("currentUserProfile")
+    if (storedProfile) {
+      const profile = JSON.parse(storedProfile)
+      setSparks(profile.sparks || 0)
     }
-    fetchSparks();
+    setIsLoaded(true)
   }, [])
 
   useEffect(() => {

@@ -553,28 +553,24 @@ export function ActiveQuests() {
             <div className="flex items-center gap-1 opacity-50 flex-shrink-0 ml-1" style={{ marginTop: hasCategory ? "12px" : "0px" }}>
               {!isArchived && (
                 <>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-6 w-6 p-0 hover:bg-primary/20"
+                  <button
+                    className="h-6 w-6 p-0 bg-transparent border-none outline-none cursor-pointer text-gray-500 hover:text-white transition-all duration-200 flex items-center justify-center hover:drop-shadow-[0_0_4px_rgba(255,255,255,0.7)]"
                     onClick={(e) => {
                       e.stopPropagation()
                       handleEditQuest(quest, category)
                     }}
                   >
                     <Pencil className="h-3 w-3" />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-6 w-6 p-0 hover:bg-destructive/20"
+                  </button>
+                  <button
+                    className="h-6 w-6 p-0 bg-transparent border-none outline-none cursor-pointer text-gray-500 hover:text-white transition-all duration-200 flex items-center justify-center hover:drop-shadow-[0_0_4px_rgba(255,255,255,0.7)]"
                     onClick={(e) => {
                       e.stopPropagation()
                       handleDeleteQuest(category, quest.id, quest.title)
                     }}
                   >
-                    <Trash2 className="h-3 w-3 text-foreground" />
-                  </Button>
+                    <Trash2 className="h-3 w-3" />
+                  </button>
                 </>
               )}
               {category === "habits" && (

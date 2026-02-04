@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, type ReactNode } from "react"
 import { createClient } from "@/utils/supabase/client"
 import { useSparks } from "@/components/providers"
+import { handleSupabaseError } from "@/lib/handle-auth-error"
 
 export interface ShopReward {
     id: string
@@ -80,92 +81,109 @@ export function ShopProvider({ children }: { children: ReactNode }) {
 
     const addReward = async (reward: Omit<ShopReward, "id" | "created_at">) => {
         try {
-            // Get current user (more reliable than session for RLS)
-            const { data: { user }, error: userError } = await supabase.auth.getUser()
+            // Get fresh session
+            const { data: { session }, error: authError } = await supabase.auth.getSession()
 
-            if (userError || !user) {
-                console.error("Auth error:", userError)
-                throw new Error("You must be logged in to create rewards")
+            console.log("Shop addReward Auth Check:", session?.user?.id)
+
+            // Check for auth errors with user-friendly toast
+            if (authError || !session?.user) {
+                handleSupabaseError(authError || new Error("Session missing"), "addReward")
+                throw new Error("Session expired. Please log in again.")
             }
 
-            console.log("Creating reward for user:", user.id)
-
-            // Insert with user_id - FIXED: Using explicit fields and Array syntax
+            // Insert with session.user.id
             const { data, error } = await supabase
                 .from("shop_rewards")
-                .insert([
-                    {
-                        title: reward.title,
-                        description: reward.description,
-                        cost: reward.cost,
-                        category: reward.category,
-                        is_on_market: reward.is_on_market,
-                        is_in_wheel: reward.is_in_wheel,
-                        drop_chance: reward.drop_chance,
-                        icon: reward.icon,
-                        user_id: user.id
-                    }
-                ])
+                .insert({
+                    title: reward.title,
+                    description: reward.description,
+                    cost: reward.cost,
+                    category: reward.category,
+                    is_on_market: reward.is_on_market,
+                    is_in_wheel: reward.is_in_wheel,
+                    drop_chance: reward.drop_chance,
+                    icon: reward.icon,
+                    user_id: session.user.id
+                })
                 .select()
                 .single()
 
             if (error) {
-                console.error("Error adding reward:", error.message || "Unknown error")
-                console.error("Error details:", {
-                    code: error.code,
-                    details: error.details,
-                    hint: error.hint,
-                })
+                handleSupabaseError(error, "addReward insert")
                 throw error
             }
 
             if (data) {
-                console.log("Reward created successfully:", data)
                 setRewards(prev => [data, ...prev])
-                // Log activity
                 await recordTransaction(data.title, 0, "item_created")
             }
 
             return data
-        } catch (error: any) {
-            console.error("Failed to add reward:", error?.message || error)
-            if (error?.code || error?.details || error?.hint) {
-                console.error("Additional error info:", {
-                    code: error.code,
-                    details: error.details,
-                    hint: error.hint,
-                })
-            }
+        } catch (error) {
+            // Re-throw after handling (caller may want to know)
             throw error
         }
     }
 
     const updateReward = async (id: string, updates: Partial<ShopReward>) => {
-        const { error } = await supabase
-            .from("shop_rewards")
-            .update(updates)
-            .eq("id", id)
+        try {
+            const { data: { session }, error: authError } = await supabase.auth.getSession()
 
-        if (!error) {
+            console.log("Shop updateReward Auth Check:", session?.user?.id)
+
+            if (authError || !session?.user) {
+                handleSupabaseError(authError || new Error("Session missing"), "updateReward")
+                throw new Error("Session expired. Please log in again.")
+            }
+
+            const { error } = await supabase
+                .from("shop_rewards")
+                .update(updates)
+                .eq("id", id)
+                .eq("user_id", session.user.id)
+
+            if (error) {
+                handleSupabaseError(error, "updateReward")
+                throw error
+            }
+
             setRewards(prev => prev.map(r => r.id === id ? { ...r, ...updates } : r))
+        } catch (error) {
+            throw error
         }
     }
 
     const deleteReward = async (id: string) => {
-        // Get reward name before deleting
-        const reward = rewards.find(r => r.id === id)
+        try {
+            const { data: { session }, error: authError } = await supabase.auth.getSession()
 
-        const { error } = await supabase
-            .from("shop_rewards")
-            .delete()
-            .eq("id", id)
+            console.log("Shop deleteReward Auth Check:", session?.user?.id)
 
-        if (!error) {
+            if (authError || !session?.user) {
+                handleSupabaseError(authError || new Error("Session missing"), "deleteReward")
+                throw new Error("Session expired. Please log in again.")
+            }
+
+            const reward = rewards.find(r => r.id === id)
+
+            const { error } = await supabase
+                .from("shop_rewards")
+                .delete()
+                .eq("id", id)
+                .eq("user_id", session.user.id)
+
+            if (error) {
+                handleSupabaseError(error, "deleteReward")
+                throw error
+            }
+
             setRewards(prev => prev.filter(r => r.id !== id))
-            // Log activity
             if (reward) {
                 await recordTransaction(reward.title, 0, "item_deleted")
             }
+        } catch (error) {
+            throw error
         }
     }
 

@@ -86,8 +86,20 @@ export function ShopRewardCard({ reward }: { reward: ShopReward }) {
                             size="sm"
                             onClick={handleBuy}
                             disabled={!canAfford || isBuying}
-                            className="font-bold h-10 px-4 sm:px-6 shadow-md transition-transform active:scale-95"
-                            style={{ backgroundColor: canAfford ? uiColor : undefined }}
+                            className={`font-bold h-10 px-4 sm:px-6 shadow-md transition-all duration-300 active:scale-95 ${canAfford ? 'hover:scale-105' : ''}`}
+                            style={{
+                                backgroundColor: canAfford ? uiColor : undefined,
+                                // @ts-ignore
+                                '--hover-glow': canAfford ? `0 0 15px ${uiColor}80` : 'none'
+                            }}
+                            onMouseEnter={(e) => {
+                                if (canAfford) {
+                                    (e.target as HTMLElement).style.boxShadow = `0 0 15px ${uiColor}80`
+                                }
+                            }}
+                            onMouseLeave={(e) => {
+                                (e.target as HTMLElement).style.boxShadow = ''
+                            }}
                         >
                             {isBuying ? "..." : "BUY"}
                         </Button>
@@ -96,21 +108,19 @@ export function ShopRewardCard({ reward }: { reward: ShopReward }) {
                         <div className="flex flex-col gap-1 ml-1 border-l border-border/50 pl-2">
                             <ShopManageDialog
                                 trigger={
-                                    <Button variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground/50 hover:text-foreground">
+                                    <button className="h-5 w-5 p-0 bg-transparent border-none outline-none cursor-pointer text-gray-500 hover:text-white transition-all duration-200 flex items-center justify-center hover:drop-shadow-[0_0_4px_rgba(255,255,255,0.7)]">
                                         <Edit className="h-3 w-3" />
-                                    </Button>
+                                    </button>
                                 }
                                 data={reward}
                                 isEditing
                             />
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-5 w-5 text-muted-foreground/50 hover:text-destructive"
+                            <button
+                                className="h-5 w-5 p-0 bg-transparent border-none outline-none cursor-pointer text-gray-500 hover:text-white transition-all duration-200 flex items-center justify-center hover:drop-shadow-[0_0_4px_rgba(255,255,255,0.7)]"
                                 onClick={handleDelete}
                             >
                                 <Trash2 className="h-3 w-3" />
-                            </Button>
+                            </button>
                         </div>
                     </div>
                 </div>

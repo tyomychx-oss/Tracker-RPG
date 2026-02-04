@@ -193,9 +193,13 @@ export function ActiveQuests() {
       setTaskSnapshots((prev) => ({ ...prev, [questId]: snapshot }))
 
       // Add XP
+      console.log("[DEBUG] handleToggleQuest - completing task:", { questId, xpAmount, skillName, questObj })
       addXP(xpAmount)
       if (skillName) {
+        console.log("[DEBUG] Adding area XP for:", skillName)
         addAreaXP(skillName, xpAmount)
+      } else {
+        console.log("[DEBUG] No skillName, skipping addAreaXP")
       }
 
       // Add Sparks logic
@@ -348,23 +352,24 @@ export function ActiveQuests() {
         onDragOver={isPinned ? (e) => e.preventDefault() : undefined}
         onDrop={isPinned ? () => handleDrop(quest.id, category) : undefined}
         onMouseEnter={(e) => {
-          e.currentTarget.style.background = `linear-gradient(to bottom, ${priorityColor}cc, ${priorityColor}44)`
+          e.currentTarget.style.background = `linear-gradient(to right, ${priorityColor}15, transparent)`
         }}
         onMouseLeave={(e) => {
-          e.currentTarget.style.background = `linear-gradient(to bottom, ${priorityColor}88, ${priorityColor}22)`
+          e.currentTarget.style.background = "transparent"
         }}
         style={{
-          padding: "1px",
-          borderRadius: "16px",
-          background: `linear-gradient(to bottom, ${priorityColor}88, ${priorityColor}22)`,
-          transition: "all 0.4s ease",
+          padding: "0",
+          borderRadius: "0",
+          background: "transparent",
+          transition: "all 0.3s ease",
         }}
       >
         <div
           style={{
-            borderRadius: "15px",
-            background: "linear-gradient(to right, rgba(24,24,38,0.95), rgba(14,14,22,0.98))",
-            padding: "16px 20px",
+            borderRadius: "12px",
+            background: "transparent",
+            border: "1px solid rgba(255, 255, 255, 0.1)",
+            padding: "12px 16px",
             position: "relative",
           }}
         >
@@ -384,14 +389,12 @@ export function ActiveQuests() {
             {/* Pin icon - positioned relative to checkbox */}
             <div style={{ position: "relative", flexShrink: 0, marginTop: hasCategory ? "12px" : "0px" }}>
               {!isArchived && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-4 w-4 p-0"
+                <button
+                  className="h-4 w-4 p-0 bg-transparent border-none outline-none cursor-pointer group/pin"
                   style={{
                     position: "absolute",
                     top: "-18px",
-                    left: "-18px",
+                    left: "-13px",
                   }}
                   onClick={(e) => {
                     e.stopPropagation()
@@ -399,10 +402,27 @@ export function ActiveQuests() {
                   }}
                 >
                   <Pin
-                    className="h-3 w-3 rotate-45"
-                    style={isPinned ? { color: uiColor, filter: `drop-shadow(0 0 4px ${uiColor})` } : { color: 'var(--muted-foreground)', opacity: 0.15 }}
+                    className="h-3 w-3 rotate-45 transition-all duration-200 group-hover/pin:scale-110"
+                    style={isPinned
+                      ? { color: uiColor, filter: `drop-shadow(0 0 4px ${uiColor})` }
+                      : { color: 'var(--muted-foreground)', opacity: 0.15 }
+                    }
+                    onMouseEnter={(e) => {
+                      if (!isPinned) {
+                        e.currentTarget.style.color = '#22d3ee'
+                        e.currentTarget.style.opacity = '1'
+                        e.currentTarget.style.filter = 'drop-shadow(0 0 4px #22d3ee)'
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isPinned) {
+                        e.currentTarget.style.color = 'var(--muted-foreground)'
+                        e.currentTarget.style.opacity = '0.15'
+                        e.currentTarget.style.filter = 'none'
+                      }
+                    }}
                   />
-                </Button>
+                </button>
               )}
 
               <Checkbox
@@ -422,7 +442,7 @@ export function ActiveQuests() {
                 <div
                   style={{
                     fontSize: "11px",
-                    color: `${priorityColor}99`,
+                    color: skillColor,
                     fontFamily: "'Crimson Pro', serif",
                     letterSpacing: "0.12em",
                     textTransform: "uppercase",
@@ -431,7 +451,7 @@ export function ActiveQuests() {
                     marginBottom: "2px"
                   }}
                 >
-                  — {quest.skill} quest
+                  — {quest.skill}
                 </div>
               )}
 
@@ -603,7 +623,7 @@ export function ActiveQuests() {
         if (!selectedAreas || selectedAreas.length === 0) return isArchived
         return isArchived && selectedAreas.includes(q.skill)
       })
-      .sort((a: any, b: any) => (a.archivedAt || 0) - (b.archivedAt || 0))
+      .sort((a: any, b: any) => (b.archivedAt || 0) - (a.archivedAt || 0))
 
   const handleCardClick = (e: React.MouseEvent) => {
     e.stopPropagation()

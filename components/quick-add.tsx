@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
-import { Plus, Award, X } from "lucide-react"
+import { Plus, Award, X, Check, Trash2, Archive } from "lucide-react"
 import { useRecentActivity, useUIColor, useQuests, useAreas } from "@/components/providers"
 
 export function QuickAdd() {
@@ -74,7 +74,7 @@ export function QuickAdd() {
       sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft))
     } catch { }
   }, [taskName, taskType, taskSkill, taskXP, taskPriority, dailyCount, dailyPeriodDays, dailyResetTime, showSubtasks, subtasks])
-  const { activities } = useRecentActivity()
+  const { activities, addActivity } = useRecentActivity()
   const { uiColor } = useUIColor()
   const { addQuest } = useQuests()
   const { areas: availableAreas } = useAreas()
@@ -127,6 +127,7 @@ export function QuickAdd() {
     }
 
     addQuest(taskType as "plans" | "dailies" | "habits", base)
+    addActivity(`Added: ${taskName}`, undefined, taskType as "plans" | "dailies" | "habits")
 
     // Reset form
     setTaskName("")
@@ -147,6 +148,63 @@ export function QuickAdd() {
     if (hours < 24) return `${hours} hour${hours > 1 ? "s" : ""} ago`
     const days = Math.floor(hours / 24)
     return `${days} day${days > 1 ? "s" : ""} ago`
+  }
+
+  const getActivityConfig = (action: string) => {
+    if (action.startsWith("Completed:")) {
+      return {
+        icon: Check,
+        label: "Completed",
+        bgColor: "bg-green-500/10",
+        textColor: "text-green-500",
+      }
+    }
+    if (action.startsWith("Uncompleted:")) {
+      return {
+        icon: X,
+        label: "Uncompleted",
+        bgColor: "bg-orange-500/10",
+        textColor: "text-orange-500",
+      }
+    }
+    if (action.startsWith("Archived:")) {
+      return {
+        icon: Archive,
+        label: "Archived",
+        bgColor: "bg-blue-500/10",
+        textColor: "text-blue-500",
+      }
+    }
+    if (action.startsWith("Deleted:")) {
+      return {
+        icon: Trash2,
+        label: "Deleted",
+        bgColor: "bg-red-500/10",
+        textColor: "text-red-500",
+      }
+    }
+    if (action.startsWith("Added:") || action.startsWith("Created:")) {
+      return {
+        icon: Plus,
+        label: "Added",
+        bgColor: "bg-emerald-500/10",
+        textColor: "text-emerald-500",
+      }
+    }
+    return {
+      icon: Award,
+      label: "Activity",
+      bgColor: "bg-gray-500/10",
+      textColor: "text-gray-500",
+    }
+  }
+
+  const getActionTitle = (action: string) => {
+    const colonIndex = action.indexOf(":")
+    if (colonIndex !== -1) {
+      return action.slice(colonIndex + 1).trim()
+    }
+    return action
   }
 
   return (
@@ -391,29 +449,35 @@ export function QuickAdd() {
             RECENT ACTIVITY
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-1">
           {activities.length === 0 ? (
             <div className="text-sm text-muted-foreground text-center py-4">No recent activity</div>
           ) : (
-            activities.slice(0, 10).map((activity) => (
-              <div key={activity.id} className="flex items-start justify-between text-sm gap-3">
-                <span
-                  className="text-foreground flex-1 overflow-hidden text-ellipsis whitespace-nowrap"
-                  style={{ maxWidth: 'min(25ch, calc(100vw - 180px))' }}
-                >
-                  {activity.action}
-                </span>
-                <div className="flex items-center gap-2 whitespace-nowrap">
-                  {activity.xp && (
-                    <span className="text-xs text-muted-foreground font-mono">
-                      {activity.xp > 0 ? "+" : ""}
-                      {activity.xp} XP
-                    </span>
-                  )}
-                  <span className="text-xs text-muted-foreground">{formatTimestamp(activity.timestamp)}</span>
+            activities.slice(0, 10).map((activity) => {
+              const config = getActivityConfig(activity.action)
+              const Icon = config.icon
+              return (
+                <div key={activity.id} className="flex items-center justify-between text-sm group hover:bg-muted/50 py-1 px-2 rounded-lg transition-colors">
+                  <div className="flex items-center gap-3 overflow-hidden">
+                    <div className={`p-1.5 rounded-full ${config.bgColor} ${config.textColor}`}>
+                      <Icon className="h-3 w-3" />
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className="truncate font-medium text-foreground">{getActionTitle(activity.action)}</span>
+                      <span className="text-[10px] text-muted-foreground uppercase">{config.label}</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end shrink-0 pl-2">
+                    {activity.xp && (
+                      <span className="font-mono text-xs font-bold" style={{ color: activity.xp >= 0 ? "#22c55e" : "#f97316" }}>
+                        {activity.xp > 0 ? "+" : ""}{activity.xp} XP
+                      </span>
+                    )}
+                    <span className="text-[10px] text-muted-foreground">{formatTimestamp(activity.timestamp)}</span>
+                  </div>
                 </div>
-              </div>
-            ))
+              )
+            })
           )}
         </CardContent>
       </Card>

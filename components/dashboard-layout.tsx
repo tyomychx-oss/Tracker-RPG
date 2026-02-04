@@ -26,54 +26,53 @@ const navigation = [
 ]
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
+  // ALL HOOKS MUST BE AT THE TOP - React requires hooks to be called in the same order every render
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
+
+  // All useState hooks
   const [activeNav, setActiveNav] = useState("Main")
   const [mounted, setMounted] = useState(false)
+  const [showSystemGuide, setShowSystemGuide] = useState(false)
 
-  // Fix hydration mismatch for Sheet component
+  // All context hooks - must be called unconditionally
+  const { nickname } = useNickname()
+  const { uiColor } = useUIColor()
+  const { totalXP, currentLevel, maxXP } = useXP()
+  const { sparks } = useSparks()
+
+  // Derived values (not hooks)
+  const xpProgress = (totalXP / maxXP) * 100
+
+  // All useEffect hooks
   useEffectReact(() => {
     setMounted(true)
   }, [])
 
-  // Sync active state with URL
   useEffect(() => {
     if (pathname === "/shop") {
       setActiveNav("Shop")
     } else if (pathname === "/") {
-      // If we are on main page, check if we have a requested view from navigation
-      // Otherwise keep current or default to Main. 
-      // Note: We don't want to reset if user is just switching tabs locally on home page.
-      // But if we arrive from /shop, we might want to default to Main.
       if (activeNav === "Shop") setActiveNav("Main")
     }
   }, [pathname])
 
+  // Handler functions (not hooks)
   const handleNavigation = (name: string) => {
     if (name === "Shop") {
       router.push("/shop")
       return
     }
 
-    // For all home tabs (Main, Areas, Statistics, Settings)
-    // If we are on Shop page, navigate back to home first
     if (pathname === "/shop") {
       router.push("/")
-      // The useEffect will handle setting activeNav to "Main" when pathname changes
-      // But we want to set it to the clicked tab instead
       setTimeout(() => setActiveNav(name), 0)
     } else {
-      // Already on home page, just switch tabs
       setActiveNav(name)
     }
   }
 
-  const [showSystemGuide, setShowSystemGuide] = useState(false)
-  const { nickname } = useNickname()
-  const { uiColor } = useUIColor()
-  const { totalXP, currentLevel, maxXP } = useXP()
-  const xpProgress = (totalXP / maxXP) * 100
   const getLevelConfig = (lvl: number) => {
     if (lvl >= 20) {
       return {
@@ -146,6 +145,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           const isActive = activeNav === item.name
           const isShop = item.name === "Shop"
           const href = isShop ? "/shop" : "/"
+          // Only use uiColor after hydration to prevent mismatch
+          const activeColor = mounted ? uiColor : undefined
 
           return (
             <Button
@@ -154,16 +155,16 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               variant={isActive ? "default" : "ghost"}
               className="w-full justify-start transition-colors"
               style={
-                isActive
+                isActive && activeColor
                   ? {
-                    backgroundColor: uiColor,
+                    backgroundColor: activeColor,
                     color: "white",
                   }
                   : undefined
               }
               onMouseEnter={(e) => {
-                if (!isActive) {
-                  e.currentTarget.style.backgroundColor = `${uiColor}33`
+                if (!isActive && activeColor) {
+                  e.currentTarget.style.backgroundColor = `${activeColor}33`
                 }
               }}
               onMouseLeave={(e) => {
@@ -237,46 +238,87 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                   <Menu className="h-6 w-6" />
                 </Button>
               )}
-              {(() => {
-                const cfg = getLevelConfig(currentLevel)
-                const Icon = cfg.icon
-                return (
-                  <>
-                    <div className={cfg.containerStyles}>
-                      <Icon className={`h-5 w-5 md:h-6 md:w-6 ${cfg.iconColor}`} />
-                    </div>
-                    <div className="hidden sm:flex flex-col">
-                      <h2 className="text-lg font-semibold">{nickname}</h2>
-                      <span className={`text-xs ${cfg.textStyles}`}>{cfg.title}</span>
-                    </div>
-                  </>
-                )
-              })()}
+              {!mounted ? (
+                <>
+                  {/* Skeleton that matches server render to prevent hydration mismatch */}
+                  <div className="h-10 w-10 md:h-12 md:w-12 rounded-full border-2 border-slate-400 bg-transparent shadow-[0_0_10px_rgba(148,163,184,0.4)] flex items-center justify-center">
+                    <Bot className="h-5 w-5 md:h-6 md:w-6 text-slate-400" />
+                  </div>
+                  <div className="hidden sm:flex flex-col">
+                    <h2 className="text-lg font-semibold">User</h2>
+                    <span className="text-xs text-slate-400">NPC</span>
+                  </div>
+                </>
+              ) : (
+                (() => {
+                  const cfg = getLevelConfig(currentLevel)
+                  const Icon = cfg.icon
+                  return (
+                    <>
+                      <div className={cfg.containerStyles}>
+                        <Icon className={`h-5 w-5 md:h-6 md:w-6 ${cfg.iconColor}`} />
+                      </div>
+                      <div className="hidden sm:flex flex-col">
+                        <h2 className="text-lg font-semibold">{nickname}</h2>
+                        <span className={`text-xs ${cfg.textStyles}`}>{cfg.title}</span>
+                      </div>
+                    </>
+                  )
+                })()
+              )}
             </div>
 
             {/* Right side: Sparks Counter + Level/XP */}
             <div className="flex items-center gap-4 ml-auto mr-8">
-              {/* Sparks Counter */}
-              <div className="flex items-center gap-1.5 bg-secondary/50 px-3 py-1.5 rounded-full border border-border/50">
-                <Zap className="h-4 w-4 text-orange-500 fill-orange-500 animate-pulse" />
-                <span className="font-mono font-bold text-orange-500">{useSparks().sparks}</span>
-              </div>
+              {!mounted ? (
+                <>
+                  {/* Skeleton Sparks Counter */}
+                  <div className="flex items-center gap-1.5 bg-secondary/50 px-3 py-1.5 rounded-full border border-border/50">
+                    <Zap className="h-4 w-4 text-orange-500 fill-orange-500" />
+                    <span className="font-mono font-bold text-orange-500">0</span>
+                  </div>
 
-              {/* Level and XP Progress */}
-              <div className="max-w-md w-48 md:w-64">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs md:text-sm font-mono text-primary">LEVEL {currentLevel}</span>
-                  <span className="text-[10px] md:text-xs text-muted-foreground font-mono">
-                    {totalXP} / {maxXP} XP
-                  </span>
-                </div>
-                <Progress value={xpProgress} className="h-2 md:h-3 bg-secondary">
-                  <div
-                    className="h-full bg-gradient-to-r from-primary to-accent transition-all"
-                    style={{ width: `${xpProgress}%` }}
-                  />
-                </Progress>
-              </div>
+                  {/* Skeleton Level and XP Progress */}
+                  <div className="max-w-md w-48 md:w-64">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs md:text-sm font-mono text-primary">LEVEL 1</span>
+                      <span className="text-[10px] md:text-xs text-muted-foreground font-mono">
+                        0 / 200 XP
+                      </span>
+                    </div>
+                    <Progress value={0} className="h-2 md:h-3 bg-secondary">
+                      <div
+                        className="h-full bg-gradient-to-r from-primary to-accent transition-all"
+                        style={{ width: `0%` }}
+                      />
+                    </Progress>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Sparks Counter */}
+                  <div className="flex items-center gap-1.5 bg-secondary/50 px-3 py-1.5 rounded-full border border-border/50">
+                    <Zap className="h-4 w-4 text-orange-500 fill-orange-500 animate-pulse" />
+                    <span className="font-mono font-bold text-orange-500">{sparks}</span>
+                  </div>
+
+                  {/* Level and XP Progress */}
+                  <div className="max-w-md w-48 md:w-64">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs md:text-sm font-mono text-primary">LEVEL {currentLevel}</span>
+                      <span className="text-[10px] md:text-xs text-muted-foreground font-mono">
+                        {totalXP} / {maxXP} XP
+                      </span>
+                    </div>
+                    <Progress value={xpProgress} className="h-2 md:h-3 bg-secondary">
+                      <div
+                        className="h-full bg-gradient-to-r from-primary to-accent transition-all"
+                        style={{ width: `${xpProgress}%` }}
+                      />
+                    </Progress>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </header>

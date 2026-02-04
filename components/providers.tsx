@@ -445,10 +445,15 @@ export function AreaXPProvider({ children }: { children: ReactNode }) {
   }, [areaXPs, isLoaded])
 
   const addAreaXP = (area: string, amount: number) => {
-    setAreaXPs((prev) => ({
-      ...prev,
-      [area]: (prev[area] || 0) + amount,
-    }))
+    console.log("[DEBUG] addAreaXP called:", { area, amount, currentAreaXPs: areaXPs })
+    setAreaXPs((prev) => {
+      const newValue = (prev[area] || 0) + amount
+      console.log("[DEBUG] addAreaXP result:", { area, oldValue: prev[area], newValue })
+      return {
+        ...prev,
+        [area]: newValue,
+      }
+    })
   }
 
   const removeAreaXP = (area: string, amount: number) => {

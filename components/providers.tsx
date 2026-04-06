@@ -11,11 +11,17 @@ export interface XPContextType {
   currentLevel: number
   maxXP: number
   setXPState: React.Dispatch<React.SetStateAction<{ totalXP: number; currentLevel: number; maxXP: number }>>
+  addXP: (amount: number) => void
+  removeXP: (amount: number) => void
+  resetXP: () => void
 }
 
 export interface AreaXPContextType {
   areaXPs: Record<string, number>
   setAreaXPs: React.Dispatch<React.SetStateAction<Record<string, number>>>
+  addAreaXP: (area: string, amount: number) => void
+  removeAreaXP: (area: string, amount: number) => void
+  removeSkillXP: (area: string, amount: number) => void
 }
 
 export interface AreaColorsContextType {
@@ -73,11 +79,16 @@ export interface QuestsContextType {
     habits: Quest[]
   }
   setQuests: React.Dispatch<React.SetStateAction<{ plans: Quest[]; dailies: Quest[]; habits: Quest[] }>>
+  addQuest: (category: "plans" | "dailies" | "habits", quest: Quest) => void
+  updateQuest: (category: "plans" | "dailies" | "habits", questId: number, updates: Partial<Quest>) => void
+  resetQuests: () => void
 }
 
 export interface RecentActivityContextType {
   activities: Array<{ id: number; action: string; timestamp: number; xp?: number; sparks?: number; type?: "plans" | "dailies" | "habits" }>
   setActivities: React.Dispatch<React.SetStateAction<Array<{ id: number; action: string; timestamp: number; xp?: number; sparks?: number; type?: "plans" | "dailies" | "habits" }>>>
+  addActivity: (action: string, xp?: number, type?: "plans" | "dailies" | "habits", sparks?: number) => void
+  resetActivities: () => void
 }
 
 export interface UIColorContextType {
@@ -194,6 +205,40 @@ export function useAreas() {
   return context
 }
 
+export function useSkillXP() {
+  const { areaXPs, removeSkillXP } = useAreaXP()
+  return {
+    skillXPs: areaXPs,
+    removeSkillXP,
+  }
+}
+
+export function useSkillColors() {
+  const { areaColors } = useAreaColors()
+  return {
+    skillColors: areaColors,
+  }
+}
+
+export function useSkills() {
+  const { areas } = useAreas()
+  return {
+    skills: areas,
+    hasSkills: areas.length > 0,
+  }
+}
+
+export function useSkillFilter() {
+  const { selectedAreas, toggleArea, clearAreas } = useAreaFilter()
+  return {
+    selectedSkill: selectedAreas.length === 1 ? selectedAreas[0] : null,
+    setSelectedSkill: (skill: string | null) => {
+      if (skill === null) clearAreas()
+      else toggleArea(skill)
+    },
+  }
+}
+
 // --- Providers ---
 
 export function XPProvider({ children }: { children: ReactNode }) {
@@ -225,6 +270,9 @@ export function XPProvider({ children }: { children: ReactNode }) {
         currentLevel: xpState.currentLevel,
         maxXP: xpState.maxXP,
         setXPState,
+        addXP: () => { }, // Dummy to satisfy types, actual logic moved to actions
+        removeXP: () => { },
+        resetXP: () => { },
       }}
     >
       {children}
@@ -234,7 +282,13 @@ export function XPProvider({ children }: { children: ReactNode }) {
 
 export function AreaXPProvider({ children }: { children: ReactNode }) {
   const [areaXPs, setAreaXPs] = useState<Record<string, number>>({})
-  return <AreaXPContext.Provider value={{ areaXPs, setAreaXPs }}>{children}</AreaXPContext.Provider>
+  return <AreaXPContext.Provider value={{
+    areaXPs,
+    setAreaXPs,
+    addAreaXP: () => { },
+    removeAreaXP: () => { },
+    removeSkillXP: () => { }
+  }}>{children}</AreaXPContext.Provider>
 }
 
 export function AreaColorsProvider({ children }: { children: ReactNode }) {
@@ -256,13 +310,26 @@ export function QuestsProvider({ children }: { children: ReactNode }) {
   const [taskSnapshots, setTaskSnapshots] = useState<Record<number, TaskStateSnapshot>>({})
 
   return (
-    <QuestsContext.Provider value={{ quests, taskSnapshots, setTaskSnapshots, setQuests }}>{children}</QuestsContext.Provider>
+    <QuestsContext.Provider value={{
+      quests,
+      taskSnapshots,
+      setTaskSnapshots,
+      setQuests,
+      addQuest: () => { },
+      updateQuest: () => { },
+      resetQuests: () => { }
+    }}>{children}</QuestsContext.Provider>
   )
 }
 
 export function RecentActivityProvider({ children }: { children: ReactNode }) {
   const [activities, setActivities] = useState<Array<{ id: number; action: string; timestamp: number; xp?: number; sparks?: number; type?: "plans" | "dailies" | "habits" }>>([])
-  return <RecentActivityContext.Provider value={{ activities, setActivities }}>{children}</RecentActivityContext.Provider>
+  return <RecentActivityContext.Provider value={{
+    activities,
+    setActivities,
+    addActivity: () => { },
+    resetActivities: () => { }
+  }}>{children}</RecentActivityContext.Provider>
 }
 
 export function UIColorProvider({ children }: { children: ReactNode }) {

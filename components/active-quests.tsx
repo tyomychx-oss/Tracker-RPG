@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Pencil, ChevronDown, ChevronUp, Trash2, Plus, X, Zap, Pin, PinOff, GripVertical } from "lucide-react"
 import { useXP, useAreaColors, useAreaFilter, useRecentActivity, useUIColor, useAreaXP, useQuests, useSparks, useAreas } from "@/components/providers"
+import { createClient } from "@/utils/supabase/client"
 
 interface TaskStateSnapshot {
   questId: number
@@ -24,14 +25,14 @@ interface TaskStateSnapshot {
 }
 
 export function ActiveQuests() {
-  const { quests, updateQuest, deleteQuest } = useQuests()
+  const { quests, updateQuest, deleteQuest, taskSnapshots, setTaskSnapshots } = useQuests()
   const { addXP, removeXP, currentLevel, totalXP, maxXP, restorePreviousState } = useXP()
   const { addAreaXP, removeAreaXP, areaXPs } = useAreaXP()
   const { areaColors } = useAreaColors()
   const { selectedAreas } = useAreaFilter()
   const { addActivity } = useRecentActivity()
   const { uiColor } = useUIColor()
-  const { addSparks, removeSparks } = useSparks() // Added
+  const { addSparks, removeSparks } = useSparks()
   const { areas: availableAreas } = useAreas()
 
   const [showArchived, setShowArchived] = useState({
@@ -55,36 +56,8 @@ export function ActiveQuests() {
     subtasks?: { id: string; title: string; completed: boolean }[]
   } | null>(null)
 
-
-  const [taskSnapshots, setTaskSnapshots] = useState<Record<number, TaskStateSnapshot>>({})
-  const [isSnapshotsLoaded, setIsSnapshotsLoaded] = useState(false)
-
   // Drag and drop state
   const [draggedQuest, setDraggedQuest] = useState<{ id: number; category: "plans" | "dailies" | "habits" } | null>(null)
-
-  // Load snapshots from localStorage
-  useEffect(() => {
-    const storedProfile = localStorage.getItem("currentUserProfile")
-    if (storedProfile) {
-      const profile = JSON.parse(storedProfile)
-      if (profile.taskSnapshots) {
-        setTaskSnapshots(profile.taskSnapshots)
-      }
-    }
-    setIsSnapshotsLoaded(true)
-  }, [])
-
-  // Save snapshots to localStorage
-  useEffect(() => {
-    if (!isSnapshotsLoaded) return
-    const storedProfile = localStorage.getItem("currentUserProfile")
-    if (storedProfile) {
-      const profile = JSON.parse(storedProfile)
-      profile.taskSnapshots = taskSnapshots
-      localStorage.setItem("currentUserProfile", JSON.stringify(profile))
-      localStorage.setItem(`userProfile_${profile.nickname}`, JSON.stringify(profile))
-    }
-  }, [taskSnapshots, isSnapshotsLoaded])
 
   // Daily Reset Logic
   useEffect(() => {

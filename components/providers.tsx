@@ -63,6 +63,8 @@ export interface Quest {
 }
 
 export interface QuestsContextType {
+  taskSnapshots: Record<number, TaskStateSnapshot>
+  setTaskSnapshots: React.Dispatch<React.SetStateAction<Record<number, TaskStateSnapshot>>>
   quests: {
     plans: Quest[]
     dailies: Quest[]
@@ -534,6 +536,7 @@ export function QuestsProvider({ children }: { children: ReactNode }) {
     dailies: [] as Quest[],
     habits: [] as Quest[],
   })
+  const [taskSnapshots, setTaskSnapshots] = useState<Record<number, TaskStateSnapshot>>({})
   const [isLoaded, setIsLoaded] = useState(false)
 
   useEffect(() => {
@@ -541,6 +544,7 @@ export function QuestsProvider({ children }: { children: ReactNode }) {
     if (storedProfile) {
       const profile = JSON.parse(storedProfile)
       if (profile.quests) setQuests(profile.quests)
+      if (profile.taskSnapshots) setTaskSnapshots(profile.taskSnapshots) // Load taskSnapshots if they exist
     }
     setIsLoaded(true)
   }, [])
@@ -551,10 +555,11 @@ export function QuestsProvider({ children }: { children: ReactNode }) {
     if (storedProfile) {
       const profile: UserProfile = JSON.parse(storedProfile)
       profile.quests = quests
+      profile.taskSnapshots = taskSnapshots // Save taskSnapshots
       localStorage.setItem("currentUserProfile", JSON.stringify(profile))
       localStorage.setItem(`userProfile_${profile.nickname}`, JSON.stringify(profile))
     }
-  }, [quests, isLoaded])
+  }, [quests, taskSnapshots, isLoaded])
 
   const addQuest = (category: "plans" | "dailies" | "habits", quest: Quest) => {
     setQuests((prev) => ({
@@ -594,7 +599,7 @@ export function QuestsProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <QuestsContext.Provider value={{ quests, addQuest, updateQuest, deleteQuest, deleteQuestsBySkill, resetQuests }}>{children}</QuestsContext.Provider>
+    <QuestsContext.Provider value={{ quests, taskSnapshots, setTaskSnapshots, addQuest, updateQuest, deleteQuest, deleteQuestsBySkill, resetQuests }}>{children}</QuestsContext.Provider>
   )
 }
 

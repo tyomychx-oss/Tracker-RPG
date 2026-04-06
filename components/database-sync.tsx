@@ -15,7 +15,7 @@ import {
 
 export function DatabaseSync() {
   const { totalXP, currentLevel, maxXP } = useXP()
-  const { quests } = useQuests()
+  const { quests, taskSnapshots } = useQuests()
   const { areaXPs } = useAreaXP()
   const { areaColors } = useAreaColors()
   const { activities } = useRecentActivity()
@@ -56,6 +56,7 @@ export function DatabaseSync() {
           current_level: currentLevel,
           max_xp: maxXP,
           quests,
+          task_snapshots: taskSnapshots,
           skill_xps: areaXPs,
           skill_colors: areaColors,
           activities,
@@ -82,7 +83,7 @@ export function DatabaseSync() {
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current)
     }
-  }, [totalXP, currentLevel, maxXP, quests, areaXPs, areaColors, activities, uiColor, nickname, sparks])
+  }, [totalXP, currentLevel, maxXP, quests, taskSnapshots, areaXPs, areaColors, activities, uiColor, nickname, sparks])
 
   // Prevent hydration mismatch by not rendering until mounted
   if (!mounted) return null

@@ -130,3 +130,70 @@ export async function syncQuestCompletion({
     sparks: newSparks
   }
 }
+
+/**
+ * Completely resets all user progress across multiple tables.
+ */
+export async function resetAllUserProgress() {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) return null
+  const userId = session.user.id
+
+  // 1. Update user_profiles (JSON fields and main stats)
+  const { error: profileError } = await supabase
+    .from("user_profiles")
+    .update({
+      total_xp: 0,
+      current_level: 1,
+      max_xp: 200,
+      sparks: 0,
+      skill_xps: {},
+      activities: [],
+      task_snapshots: {},
+      // For the JSON field, we want to keep the quests but set completed: false
+    })
+    .eq("user_id", userId)
+
+  if (profileError) {
+    console.error("Failed to reset profile:", profileError)
+    throw profileError
+  }
+
+  // 2. Fetch existing quests from user_profile to reset them in the JSON
+  // (We'll do this to ensure UI sync consistency if the app still relies on JSON)
+  const { data: profile } = await supabase
+    .from("user_profiles")
+    .select("quests")
+    .eq("user_id", userId)
+    .single()
+
+  if (profile?.quests) {
+    const resetQuests = {
+      plans: (profile.quests.plans || []).map((q: any) => ({ ...q, completed: false })),
+      dailies: (profile.quests.dailies || []).map((q: any) => ({ ...q, completed: false, completedCount: 0 })),
+      habits: (profile.quests.habits || []).map((q: any) => ({ ...q, completed: false, streak: 0 }))
+    }
+    await supabase.from("user_profiles").update({ quests: resetQuests }).eq("user_id", userId)
+  }
+
+  // 3. Update separate tables (if they exist)
+  // These calls are wrapped in try-catch to avoid crashing if tables don't exist yet
+  try {
+    await supabase.from("areas").update({ xp: 0, level: 0 }).eq("user_id", userId)
+  } catch (e) {}
+
+  try {
+    await supabase.from("quests").update({ completed: false }).eq("user_id", userId)
+  } catch (e) {}
+
+  // 4. Delete history/transactions
+  try {
+    await supabase.from("transactions").delete().eq("user_id", userId)
+  } catch (e) {}
+
+  try {
+    await supabase.from("activity_history").delete().eq("user_id", userId)
+  } catch (e) {}
+
+  return true
+}

@@ -6,7 +6,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
-import { useNickname, useUIColor, useXP, useSkillXP, useSkills, useRecentActivity, useQuests } from "@/components/providers"
+import { useNickname, useUIColor, useXP, useAreaXP, useSkills, useRecentActivity, useQuests, useSparks } from "@/components/providers"
+import { resetAllUserProgress } from "@/lib/supabase-actions"
+import { toast } from "sonner"
 
 const INTERFACE_COLORS = [
   { name: "Terracotta", value: "#de6550" },
@@ -26,11 +28,12 @@ const INTERFACE_COLORS = [
 export function SettingsPage() {
   const { nickname, setNickname } = useNickname()
   const { uiColor, setUIColor } = useUIColor()
-  const { resetXP, addXP, removeXP } = useXP()
-  const { skillXPs, removeSkillXP } = useSkillXP()
+  const { setXPState, addXP, removeXP } = useXP()
+  const { setAreaXPs } = useAreaXP()
   const { skills } = useSkills()
-  const { activities, addActivity, resetActivities } = useRecentActivity()
-  const { resetQuests } = useQuests()
+  const { setActivities, addActivity } = useRecentActivity()
+  const { quests, setQuests, setTaskSnapshots } = useQuests()
+  const { setSparks } = useSparks()
   const [tempNickname, setTempNickname] = useState(nickname)
   const [showNicknameSaved, setShowNicknameSaved] = useState(false)
   const [showColorSaved, setShowColorSaved] = useState(false)
@@ -56,22 +59,47 @@ export function SettingsPage() {
     }, 2000)
   }
 
-  const handleRemoveProgress = () => {
-    // Manually clear taskSnapshots in localStorage as it's not managed by a global context
-    const storedProfile = localStorage.getItem("currentUserProfile")
-    if (storedProfile) {
-      const profile = JSON.parse(storedProfile)
-      profile.taskSnapshots = {}
-      localStorage.setItem("currentUserProfile", JSON.stringify(profile))
-      localStorage.setItem(`userProfile_${profile.nickname}`, JSON.stringify(profile))
-    }
+  const handleRemoveProgress = async () => {
+    try {
+      // 1. Backend call
+      await resetAllUserProgress()
 
-    // Reset state via contexts
-    resetXP()
-    Object.keys(skillXPs).forEach(skill => removeSkillXP(skill, skillXPs[skill]))
-    Object.keys(skills).forEach(skill => removeSkillXP(skill, (skills as unknown as Record<string, number>)[skill]))
-    resetActivities()
-    resetQuests()
+      // 2. Optimistic UI update
+      setXPState({ totalXP: 0, currentLevel: 1, maxXP: 200 })
+      setAreaXPs({})
+      setActivities([])
+      setSparks(0)
+      setTaskSnapshots({})
+      
+      // Reset all quests to incomplete while preserving them
+      const resetQuestsData = {
+        plans: (quests.plans || []).map((q: any) => ({ ...q, completed: false })),
+        dailies: (quests.dailies || []).map((q: any) => ({ ...q, completed: false, completedCount: 0 })),
+        habits: (quests.habits || []).map((q: any) => ({ ...q, completed: false, streak: 0 }))
+      }
+      setQuests(resetQuestsData)
+
+      // 3. LocalStorage cleanup (for backup/persistence if used)
+      const storedProfile = localStorage.getItem("currentUserProfile")
+      if (storedProfile) {
+        const profile = JSON.parse(storedProfile)
+        profile.totalXP = 0
+        profile.currentLevel = 1
+        profile.skillXPs = {}
+        profile.activities = []
+        profile.sparks = 0
+        profile.taskSnapshots = {}
+        profile.quests = resetQuestsData
+        localStorage.setItem("currentUserProfile", JSON.stringify(profile))
+        localStorage.setItem(`userProfile_${profile.nickname}`, JSON.stringify(profile))
+      }
+
+      toast.success("Progress completely reset")
+      setShowRemoveProgressDialog(false)
+    } catch (error) {
+      console.error("Reset failed:", error)
+      toast.error("Failed to reset progress. Please try again.")
+    }
   }
 
   return (

@@ -11,7 +11,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { useNickname, useUIColor, useXP, useSkills, useSkillXP, useSkillColors, useRecentActivity, useQuests, useSparks } from "@/components/providers"
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, LineChart, Line, ReferenceArea } from "recharts"
-import { DatabaseSync } from "@/components/database-sync"
 import { SystemGuide } from "@/components/system-guide"
 import { useRouter, usePathname, useSearchParams } from "next/navigation"
 import { useEffect } from "react"
@@ -209,7 +208,6 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background flex">
-      <DatabaseSync />
       <SystemGuide open={showSystemGuide} onOpenChange={setShowSystemGuide} />
       {/* Desktop Sidebar */}
       <aside className="w-64 bg-sidebar border-r border-sidebar-border hidden md:flex flex-col">

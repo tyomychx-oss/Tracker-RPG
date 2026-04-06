@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { createContext, useContext, useState, useEffect, useRef, type ReactNode } from "react"
+import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
 import { ShopProvider } from "@/components/shop-provider"
 
 // --- Interfaces ---
@@ -10,24 +10,23 @@ export interface XPContextType {
   accumulatedXP: number
   currentLevel: number
   maxXP: number
-  setXPState: React.Dispatch<React.SetStateAction<{ totalXP: number; currentLevel: number; maxXP: number }>> // Added
+  setXPState: React.Dispatch<React.SetStateAction<{ totalXP: number; currentLevel: number; maxXP: number }>>
   addXP: (amount: number) => void
   removeXP: (amount: number) => void
   resetXP: () => void
-  restorePreviousState: (previousLevel: number, previousXP: number, previousMaxXP: number) => void
 }
 
 export interface AreaXPContextType {
   areaXPs: Record<string, number>
-  setAreaXPs: React.Dispatch<React.SetStateAction<Record<string, number>>> // Added
+  setAreaXPs: React.Dispatch<React.SetStateAction<Record<string, number>>>
   addAreaXP: (area: string, amount: number) => void
   removeAreaXP: (area: string, amount: number) => void
-  renameAreaXPKey: (oldName: string, newName: string) => void
+  removeSkillXP: (area: string, amount: number) => void
 }
 
 export interface AreaColorsContextType {
   areaColors: Record<string, string>
-  setAreaColors: React.Dispatch<React.SetStateAction<Record<string, string>>> // Added
+  setAreaColors: React.Dispatch<React.SetStateAction<Record<string, string>>>
   setAreaColor: (area: string, color: string) => void
   renameAreaColorKey: (oldName: string, newName: string) => void
 }
@@ -65,6 +64,14 @@ export interface Quest {
   pinnedOrder?: number
 }
 
+export interface TaskStateSnapshot {
+  questId: number
+  previousLevel: number
+  previousXP: number
+  previousMaxXP: number
+  previousSkillXP: number
+}
+
 export interface QuestsContextType {
   taskSnapshots: Record<number, TaskStateSnapshot>
   setTaskSnapshots: React.Dispatch<React.SetStateAction<Record<number, TaskStateSnapshot>>>
@@ -76,14 +83,12 @@ export interface QuestsContextType {
   setQuests: React.Dispatch<React.SetStateAction<{ plans: Quest[]; dailies: Quest[]; habits: Quest[] }>>
   addQuest: (category: "plans" | "dailies" | "habits", quest: Quest) => void
   updateQuest: (category: "plans" | "dailies" | "habits", questId: number, updates: Partial<Quest>) => void
-  deleteQuest: (category: "plans" | "dailies" | "habits", questId: number) => void
-  deleteQuestsBySkill: (skill: string) => void
   resetQuests: () => void
 }
 
 export interface RecentActivityContextType {
   activities: Array<{ id: number; action: string; timestamp: number; xp?: number; sparks?: number; type?: "plans" | "dailies" | "habits" }>
-  setActivities: React.Dispatch<React.SetStateAction<Array<{ id: number; action: string; timestamp: number; xp?: number; sparks?: number; type?: "plans" | "dailies" | "habits" }>>> // Added
+  setActivities: React.Dispatch<React.SetStateAction<Array<{ id: number; action: string; timestamp: number; xp?: number; sparks?: number; type?: "plans" | "dailies" | "habits" }>>>
   addActivity: (action: string, xp?: number, type?: "plans" | "dailies" | "habits", sparks?: number) => void
   resetActivities: () => void
 }
@@ -100,17 +105,9 @@ export interface NicknameContextType {
 
 export interface SparksContextType {
   sparks: number
-  setSparks: React.Dispatch<React.SetStateAction<number>> // Added
+  setSparks: React.Dispatch<React.SetStateAction<number>>
   addSparks: (amount: number) => void
   removeSparks: (amount: number) => void
-}
-
-export interface TaskStateSnapshot {
-  questId: number
-  previousLevel: number
-  previousXP: number
-  previousMaxXP: number
-  previousSkillXP: number
 }
 
 export interface UserProfile {
@@ -118,7 +115,7 @@ export interface UserProfile {
   totalXP: number
   currentLevel: number
   maxXP: number
-  sparks: number // New field
+  sparks: number
   skillXPs: Record<string, number>
   skillColors: Record<string, string>
   quests: {
@@ -129,17 +126,16 @@ export interface UserProfile {
   activities: Array<{ id: number; action: string; timestamp: number; xp?: number; sparks?: number; type?: "plans" | "dailies" | "habits" }>
   uiColor: string
   taskSnapshots?: Record<number, TaskStateSnapshot>
-  archivedSkills?: string[]
+  archivedAreas?: string[]
 }
 
 export interface AreasContextType {
   areas: string[]
   setAreas: React.Dispatch<React.SetStateAction<string[]>>
-  addArea: (areaName: string, color: string) => void
-  removeArea: (areaName: string) => void
-  hasAreas: boolean
   archivedAreas: string[]
   setArchivedAreas: React.Dispatch<React.SetStateAction<string[]>>
+  addArea: (areaName: string, color: string) => void
+  removeArea: (areaName: string) => void
   archiveArea: (areaName: string) => void
   unarchiveArea: (areaName: string) => void
   renameArea: (oldName: string, newName: string, newColor?: string) => void
@@ -219,29 +215,25 @@ export function useAreas() {
 }
 
 export function useSkillXP() {
-  const { areaXPs, addAreaXP, removeAreaXP } = useAreaXP()
+  const { areaXPs, removeSkillXP } = useAreaXP()
   return {
     skillXPs: areaXPs,
-    addSkillXP: addAreaXP,
-    removeSkillXP: removeAreaXP,
+    removeSkillXP,
   }
 }
 
 export function useSkillColors() {
-  const { areaColors, setAreaColor } = useAreaColors()
+  const { areaColors } = useAreaColors()
   return {
     skillColors: areaColors,
-    setSkillColor: setAreaColor,
   }
 }
 
 export function useSkills() {
-  const { areas, addArea, removeArea, hasAreas } = useAreas()
+  const { areas } = useAreas()
   return {
     skills: areas,
-    addSkill: addArea,
-    removeSkill: removeArea,
-    hasSkills: hasAreas,
+    hasSkills: areas.length > 0,
   }
 }
 
@@ -264,22 +256,12 @@ export function XPProvider({ children }: { children: ReactNode }) {
     currentLevel: 1,
     maxXP: 200,
   })
-  const [isLoaded, setIsLoaded] = useState(false)
-  const hasUserMadeChanges = useRef(false)
 
-
-  useEffect(() => {
-    if (!isLoaded) return
-    const storedProfile = localStorage.getItem("currentUserProfile")
-    if (storedProfile) {
-      const profile: UserProfile = JSON.parse(storedProfile)
-      profile.totalXP = xpState.totalXP
-      profile.currentLevel = xpState.currentLevel
-      profile.maxXP = xpState.maxXP
-      localStorage.setItem("currentUserProfile", JSON.stringify(profile))
-      localStorage.setItem(`userProfile_${profile.nickname}`, JSON.stringify(profile))
-    }
-  }, [xpState.totalXP, xpState.currentLevel, xpState.maxXP, isLoaded])
+  // Since we use SupabaseActions for updates, these are skeleton functions to satisfy types 
+  // or they can local-update if needed. The SyncManager handles the true source of truth.
+  const addXP = (amount: number) => { }
+  const removeXP = (amount: number) => { }
+  const resetXP = () => { }
 
   const calculateTotalXP = (level: number, currentXP: number, currentMaxXP: number): number => {
     let total = currentXP
@@ -293,124 +275,7 @@ export function XPProvider({ children }: { children: ReactNode }) {
     return total
   }
 
-  const calculateLevelFromTotalXP = (totalXP: number): { level: number; currentXP: number; maxXP: number } => {
-    if (totalXP <= 0) return { level: 1, currentXP: 0, maxXP: 200 }
-    let remainingXP = totalXP
-    let level = 1
-    let maxXP = 200
-    while (remainingXP >= maxXP) {
-      remainingXP -= maxXP
-      level += 1
-      maxXP = Math.floor(maxXP * 1.4)
-    }
-    return { level, currentXP: remainingXP, maxXP }
-  }
-
-  useEffect(() => {
-    const storedProfile = localStorage.getItem("currentUserProfile")
-    if (storedProfile) {
-      const profile: UserProfile = JSON.parse(storedProfile)
-
-      // Calculate Accumulated XP from profile
-      const accXP = calculateTotalXP(profile.currentLevel || 1, profile.totalXP || 0, profile.maxXP || 200)
-
-      // Calculate Daily XP from activities
-      let dailyXP = 0
-      if (profile.activities) {
-        const today = new Date().toDateString()
-        dailyXP = profile.activities
-          .filter((a) => {
-            const isToday = new Date(a.timestamp).toDateString() === today
-            // Only count positive XP gains (completed tasks), ignore penalties for now or handle net?
-            // User said "Daily XP Progress writes 1050". That chart usually sums positive gains.
-            // But if I uncomplete a task, I lose XP.
-            // If I sum ALL activities (pos and neg) for today:
-            return isToday
-          })
-          .reduce((sum, a) => sum + (a.xp || 0), 0)
-      }
-
-      // If Accumulated XP is less than Daily XP (meaning we lost track of some XP), sync it up.
-      // We only sync if accXP < dailyXP. If accXP > dailyXP, it's fine (previous days' XP).
-      if (accXP < dailyXP) {
-        const { level, currentXP, maxXP } = calculateLevelFromTotalXP(dailyXP)
-        setXPState({
-          totalXP: currentXP,
-          currentLevel: level,
-          maxXP: maxXP,
-        })
-      } else {
-        setXPState({
-          totalXP: profile.totalXP || 0,
-          currentLevel: profile.currentLevel || 1,
-          maxXP: profile.maxXP || 200,
-        })
-      }
-    }
-    setIsLoaded(true)
-  }, [])
-
-  useEffect(() => {
-    if (!isLoaded) return
-    const storedProfile = localStorage.getItem("currentUserProfile")
-    if (storedProfile) {
-      const profile: UserProfile = JSON.parse(storedProfile)
-      profile.totalXP = xpState.totalXP
-      profile.currentLevel = xpState.currentLevel
-      profile.maxXP = xpState.maxXP
-      localStorage.setItem("currentUserProfile", JSON.stringify(profile))
-      localStorage.setItem(`userProfile_${profile.nickname}`, JSON.stringify(profile))
-    }
-  }, [xpState, isLoaded])
-
-  // Calculate accumulated XP for consumption
   const accumulatedXP = calculateTotalXP(xpState.currentLevel, xpState.totalXP, xpState.maxXP)
-
-  const addXP = (amount: number) => {
-    hasUserMadeChanges.current = true
-    setXPState((prev) => {
-      const totalXPBefore = calculateTotalXP(prev.currentLevel, prev.totalXP, prev.maxXP)
-      const totalXPAfter = totalXPBefore + amount
-      const { level, currentXP, maxXP: newMaxXP } = calculateLevelFromTotalXP(totalXPAfter)
-      return {
-        currentLevel: level,
-        totalXP: currentXP,
-        maxXP: newMaxXP,
-      }
-    })
-  }
-
-  const removeXP = (amount: number) => {
-    hasUserMadeChanges.current = true
-    setXPState((prev) => {
-      const totalXPBefore = calculateTotalXP(prev.currentLevel, prev.totalXP, prev.maxXP)
-      const totalXPAfter = Math.max(0, totalXPBefore - amount)
-      const { level, currentXP, maxXP: newMaxXP } = calculateLevelFromTotalXP(totalXPAfter)
-      return {
-        currentLevel: level,
-        totalXP: currentXP,
-        maxXP: newMaxXP,
-      }
-    })
-  }
-
-  const resetXP = () => {
-    hasUserMadeChanges.current = true
-    setXPState({
-      totalXP: 0,
-      currentLevel: 1,
-      maxXP: 200,
-    })
-  }
-
-  const restorePreviousState = (previousLevel: number, previousXP: number, previousMaxXP: number) => {
-    hasUserMadeChanges.current = true
-    setXPState({
-      currentLevel: previousLevel,
-      totalXP: previousXP,
-      maxXP: previousMaxXP,
-    })
-  }
 
   return (
     <XPContext.Provider
@@ -419,11 +284,10 @@ export function XPProvider({ children }: { children: ReactNode }) {
         accumulatedXP,
         currentLevel: xpState.currentLevel,
         maxXP: xpState.maxXP,
-        setXPState, // Added
+        setXPState,
         addXP,
         removeXP,
         resetXP,
-        restorePreviousState,
       }}
     >
       {children}
@@ -433,94 +297,28 @@ export function XPProvider({ children }: { children: ReactNode }) {
 
 export function AreaXPProvider({ children }: { children: ReactNode }) {
   const [areaXPs, setAreaXPs] = useState<Record<string, number>>({})
-  const [isLoaded, setIsLoaded] = useState(false)
 
-  useEffect(() => {
-    const storedProfile = localStorage.getItem("currentUserProfile")
-    if (storedProfile) {
-      const profile = JSON.parse(storedProfile)
-      setAreaXPs(profile.skillXPs || {})
-    }
-    setIsLoaded(true)
-  }, [])
+  const addAreaXP = (area: string, amount: number) => { }
+  const removeAreaXP = (area: string, amount: number) => { }
+  const removeSkillXP = (area: string, amount: number) => { }
 
-  useEffect(() => {
-    if (!isLoaded) return
-    const storedProfile = localStorage.getItem("currentUserProfile")
-    if (storedProfile) {
-      const profile: UserProfile = JSON.parse(storedProfile)
-      profile.skillXPs = areaXPs
-      localStorage.setItem("currentUserProfile", JSON.stringify(profile))
-      localStorage.setItem(`userProfile_${profile.nickname}`, JSON.stringify(profile))
-    }
-  }, [areaXPs, isLoaded])
-
-  const addAreaXP = (area: string, amount: number) => {
-    console.log("[DEBUG] addAreaXP called:", { area, amount, currentAreaXPs: areaXPs })
-    setAreaXPs((prev) => {
-      const newValue = (prev[area] || 0) + amount
-      console.log("[DEBUG] addAreaXP result:", { area, oldValue: prev[area], newValue })
-      return {
-        ...prev,
-        [area]: newValue,
-      }
-    })
-  }
-
-  const removeAreaXP = (area: string, amount: number) => {
-    setAreaXPs((prev) => ({
-      ...prev,
-      [area]: Math.max(0, (prev[area] || 0) - amount),
-    }))
-  }
-
-  const renameAreaXPKey = (oldName: string, newName: string) => {
-    setAreaXPs((prev) => {
-      if (!(oldName in prev)) return prev
-      const next = { ...prev }
-      next[newName] = prev[oldName]
-      delete next[oldName]
-      return next
-    })
-  }
-
-  return <AreaXPContext.Provider value={{ areaXPs, setAreaXPs, addAreaXP, removeAreaXP, renameAreaXPKey }}>{children}</AreaXPContext.Provider>
+  return <AreaXPContext.Provider value={{ areaXPs, setAreaXPs, addAreaXP, removeAreaXP, removeSkillXP }}>{children}</AreaXPContext.Provider>
 }
 
 export function AreaColorsProvider({ children }: { children: ReactNode }) {
   const [areaColors, setAreaColors] = useState<Record<string, string>>({})
-  const [isLoaded, setIsLoaded] = useState(false)
-
-  useEffect(() => {
-    const storedProfile = localStorage.getItem("currentUserProfile")
-    if (storedProfile) {
-      const profile = JSON.parse(storedProfile)
-      setAreaColors(profile.skillColors || {})
-    }
-    setIsLoaded(true)
-  }, [])
-
-  useEffect(() => {
-    if (!isLoaded) return
-    const storedProfile = localStorage.getItem("currentUserProfile")
-    if (storedProfile) {
-      const profile: UserProfile = JSON.parse(storedProfile)
-      profile.skillColors = areaColors
-      localStorage.setItem("currentUserProfile", JSON.stringify(profile))
-      localStorage.setItem(`userProfile_${profile.nickname}`, JSON.stringify(profile))
-    }
-  }, [areaColors, isLoaded])
 
   const setAreaColor = (area: string, color: string) => {
-    setAreaColors((prev) => ({ ...prev, [area]: color }))
+    setAreaColors(prev => ({ ...prev, [area]: color }))
   }
 
   const renameAreaColorKey = (oldName: string, newName: string) => {
-    setAreaColors((prev) => {
-      if (!(oldName in prev)) return prev
+    setAreaColors(prev => {
       const next = { ...prev }
-      next[newName] = prev[oldName]
-      delete next[oldName]
+      if (next[oldName]) {
+        next[newName] = next[oldName]
+        delete next[oldName]
+      }
       return next
     })
   }
@@ -531,182 +329,46 @@ export function AreaColorsProvider({ children }: { children: ReactNode }) {
 export function AreaFilterProvider({ children }: { children: ReactNode }) {
   const [selectedAreas, setSelectedAreas] = useState<string[]>([])
   const toggleArea = (area: string) => {
-    setSelectedAreas((prev) =>
-      prev.includes(area) ? prev.filter((a) => a !== area) : [...prev, area]
-    )
+    setSelectedAreas((prev) => prev.includes(area) ? prev.filter((a) => a !== area) : [...prev, area])
   }
   const clearAreas = () => setSelectedAreas([])
   return <AreaFilterContext.Provider value={{ selectedAreas, toggleArea, clearAreas }}>{children}</AreaFilterContext.Provider>
 }
 
 export function QuestsProvider({ children }: { children: ReactNode }) {
-  const [quests, setQuests] = useState({
-    plans: [] as Quest[],
-    dailies: [] as Quest[],
-    habits: [] as Quest[],
-  })
+  const [quests, setQuests] = useState({ plans: [] as Quest[], dailies: [] as Quest[], habits: [] as Quest[] })
   const [taskSnapshots, setTaskSnapshots] = useState<Record<number, TaskStateSnapshot>>({})
-  const [isLoaded, setIsLoaded] = useState(false)
 
-  useEffect(() => {
-    const storedProfile = localStorage.getItem("currentUserProfile")
-    if (storedProfile) {
-      const profile = JSON.parse(storedProfile)
-      if (profile.quests) setQuests(profile.quests)
-      if (profile.taskSnapshots) setTaskSnapshots(profile.taskSnapshots) // Load taskSnapshots if they exist
-    }
-    setIsLoaded(true)
-  }, [])
-
-  useEffect(() => {
-    if (!isLoaded) return
-    const storedProfile = localStorage.getItem("currentUserProfile")
-    if (storedProfile) {
-      const profile: UserProfile = JSON.parse(storedProfile)
-      profile.quests = quests
-      profile.taskSnapshots = taskSnapshots // Save taskSnapshots
-      localStorage.setItem("currentUserProfile", JSON.stringify(profile))
-      localStorage.setItem(`userProfile_${profile.nickname}`, JSON.stringify(profile))
-    }
-  }, [quests, taskSnapshots, isLoaded])
-
-  const addQuest = (category: "plans" | "dailies" | "habits", quest: Quest) => {
-    setQuests((prev) => ({
-      ...prev,
-      [category]: [...prev[category], quest],
-    }))
-  }
-
-  const updateQuest = (category: "plans" | "dailies" | "habits", questId: number, updates: Partial<Quest>) => {
-    setQuests((prev) => ({
-      ...prev,
-      [category]: prev[category].map((q) => (q.id === questId ? { ...q, ...updates } : q)),
-    }))
-  }
-
-  const deleteQuest = (category: "plans" | "dailies" | "habits", questId: number) => {
-    setQuests((prev) => ({
-      ...prev,
-      [category]: prev[category].filter((q) => q.id !== questId),
-    }))
-  }
-
-  const deleteQuestsBySkill = (skill: string) => {
-    setQuests((prev) => ({
-      plans: prev.plans.filter((q) => q.skill !== skill),
-      dailies: prev.dailies.filter((q) => q.skill !== skill),
-      habits: prev.habits.filter((q) => q.skill !== skill),
-    }))
-  }
-
-  const resetQuests = () => {
-    setQuests((prev) => ({
-      plans: prev.plans.map(q => ({ ...q, completed: false, lastCompletedDate: null })),
-      dailies: prev.dailies.map(q => ({ ...q, completed: false, lastCompletedDate: null })),
-      habits: prev.habits.map(q => ({ ...q, completed: false, lastCompletedDate: null })),
-    }))
-  }
+  const addQuest = () => { }
+  const updateQuest = () => { }
+  const resetQuests = () => { }
 
   return (
-    <QuestsContext.Provider value={{ quests, taskSnapshots, setTaskSnapshots, setQuests, addQuest, updateQuest, deleteQuest, deleteQuestsBySkill, resetQuests }}>{children}</QuestsContext.Provider>
+    <QuestsContext.Provider value={{ quests, taskSnapshots, setTaskSnapshots, setQuests, addQuest, updateQuest, resetQuests }}>
+      {children}
+    </QuestsContext.Provider>
   )
 }
 
 export function RecentActivityProvider({ children }: { children: ReactNode }) {
-  const [activities, setActivities] = useState<
-    Array<{ id: number; action: string; timestamp: number; xp?: number; type?: "plans" | "dailies" | "habits" }>
-  >([])
-  const [isLoaded, setIsLoaded] = useState(false)
+  const [activities, setActivities] = useState<Array<{ id: number; action: string; timestamp: number; xp?: number; sparks?: number; type?: "plans" | "dailies" | "habits" }>>([])
 
-  useEffect(() => {
-    const storedProfile = localStorage.getItem("currentUserProfile")
-    if (storedProfile) {
-      const profile = JSON.parse(storedProfile)
-      setActivities(profile.activities || [])
-    }
-    setIsLoaded(true)
-  }, [])
-
-  useEffect(() => {
-    if (!isLoaded) return
-    const storedProfile = localStorage.getItem("currentUserProfile")
-    if (storedProfile) {
-      const profile: UserProfile = JSON.parse(storedProfile)
-      profile.activities = activities
-      localStorage.setItem("currentUserProfile", JSON.stringify(profile))
-      localStorage.setItem(`userProfile_${profile.nickname}`, JSON.stringify(profile))
-    }
-  }, [activities, isLoaded])
-
-  const addActivity = (action: string, xp?: number, type?: "plans" | "dailies" | "habits", sparks?: number) => {
-    setActivities((prev) => [{ id: Date.now(), action, timestamp: Date.now(), xp, sparks, type }, ...prev.slice(0, 999)])
-  }
-
-  const resetActivities = () => {
-    setActivities([])
-  }
+  const addActivity = (action: string, xp?: number, type?: "plans" | "dailies" | "habits", sparks?: number) => { }
+  const resetActivities = () => setActivities([])
 
   return <RecentActivityContext.Provider value={{ activities, setActivities, addActivity, resetActivities }}>{children}</RecentActivityContext.Provider>
 }
 
 export function UIColorProvider({ children }: { children: ReactNode }) {
   const [uiColor, setUIColor] = useState("#de6550")
-  const [isLoaded, setIsLoaded] = useState(false)
-
-  useEffect(() => {
-    const storedProfile = localStorage.getItem("currentUserProfile")
-    if (storedProfile) {
-      const profile: UserProfile = JSON.parse(storedProfile)
-      setUIColor(profile.uiColor || "#de6550")
-    }
-    setIsLoaded(true)
-  }, [])
-
-  useEffect(() => {
-    if (!isLoaded) return
-    const storedProfile = localStorage.getItem("currentUserProfile")
-    if (storedProfile) {
-      const profile: UserProfile = JSON.parse(storedProfile)
-      profile.uiColor = uiColor
-      localStorage.setItem("currentUserProfile", JSON.stringify(profile))
-      localStorage.setItem(`userProfile_${profile.nickname}`, JSON.stringify(profile))
-    }
-  }, [uiColor, isLoaded])
-
   return <UIColorContext.Provider value={{ uiColor, setUIColor }}>{children}</UIColorContext.Provider>
 }
 
 export function SparksProvider({ children }: { children: ReactNode }) {
   const [sparks, setSparks] = useState(0)
-  const [isLoaded, setIsLoaded] = useState(false)
 
-  useEffect(() => {
-    const storedProfile = localStorage.getItem("currentUserProfile")
-    if (storedProfile) {
-      const profile = JSON.parse(storedProfile)
-      setSparks(profile.sparks || 0)
-    }
-    setIsLoaded(true)
-  }, [])
-
-  useEffect(() => {
-    if (!isLoaded) return
-    const storedProfile = localStorage.getItem("currentUserProfile")
-    if (storedProfile) {
-      const profile: UserProfile = JSON.parse(storedProfile)
-      profile.sparks = sparks
-      localStorage.setItem("currentUserProfile", JSON.stringify(profile))
-      localStorage.setItem(`userProfile_${profile.nickname}`, JSON.stringify(profile))
-    }
-  }, [sparks, isLoaded])
-
-  const addSparks = (amount: number) => {
-    setSparks((prev) => prev + amount)
-  }
-
-  const removeSparks = (amount: number) => {
-    setSparks((prev) => Math.max(0, prev - amount))
-  }
+  const addSparks = (amount: number) => { }
+  const removeSparks = (amount: number) => { }
 
   return (
     <SparksContext.Provider value={{ sparks, setSparks, addSparks, removeSparks }}>
@@ -719,175 +381,31 @@ export function SparksProvider({ children }: { children: ReactNode }) {
 
 export function NicknameProvider({ children }: { children: ReactNode }) {
   const [nickname, setNickname] = useState("")
-
-  useEffect(() => {
-    const storedProfile = localStorage.getItem("currentUserProfile")
-    if (storedProfile) {
-      const profile: UserProfile = JSON.parse(storedProfile)
-      setNickname(profile.nickname || "")
-    }
-  }, [])
-
   return <NicknameContext.Provider value={{ nickname, setNickname }}>{children}</NicknameContext.Provider>
 }
 
 export function AreasProvider({ children }: { children: ReactNode }) {
   const [areas, setAreas] = useState<string[]>([])
   const [archivedAreas, setArchivedAreas] = useState<string[]>([])
-  const [isLoaded, setIsLoaded] = useState(false)
-  const { removeSkillXP, skillXPs } = useSkillXP()
-  const { skillColors } = useSkillColors()
-  const { quests, deleteQuestsBySkill, updateQuest } = useQuests()
-  const { removeXP } = useXP()
-  const { renameAreaXPKey } = useAreaXP()
-  const { renameAreaColorKey, setAreaColor } = useAreaColors()
 
-  useEffect(() => {
-    const storedProfile = localStorage.getItem("currentUserProfile")
-    if (storedProfile) {
-      const profile: UserProfile & { archivedAreas?: string[] } = JSON.parse(storedProfile)
-      const allAreaNames = Object.keys(profile.skillColors || {})
-      const archived = profile.archivedAreas || []
-      setArchivedAreas(archived)
-      setAreas(allAreaNames.filter((n) => !archived.includes(n)))
-    }
-    setIsLoaded(true)
-  }, [])
+  const addArea = () => { }
+  const removeArea = () => { }
+  const archiveArea = () => { }
+  const unarchiveArea = () => { }
+  const renameArea = () => { }
 
-  const persistArchived = (nextArchived: string[]) => {
-    const storedProfile = localStorage.getItem("currentUserProfile")
-    if (storedProfile) {
-      const profile: any = JSON.parse(storedProfile)
-      profile.archivedAreas = nextArchived
-      localStorage.setItem("currentUserProfile", JSON.stringify(profile))
-      localStorage.setItem(`userProfile_${profile.nickname}`, JSON.stringify(profile))
-    }
-  }
-
-  const addArea = (areaName: string, color: string) => {
-    if (!areas.includes(areaName) && !archivedAreas.includes(areaName)) {
-      setAreas((prev) => [...prev, areaName])
-    }
-  }
-
-  const removeArea = (areaName: string) => {
-    setAreas((prev) => prev.filter((s) => s !== areaName))
-    const storedProfile = localStorage.getItem("currentUserProfile")
-    if (storedProfile) {
-      const profile: UserProfile = JSON.parse(storedProfile)
-      if (profile.skillColors) delete profile.skillColors[areaName]
-      if (profile.skillXPs) delete profile.skillXPs[areaName]
-      if (profile.quests) {
-        profile.quests.plans = profile.quests.plans.filter((q) => q.skill !== areaName)
-        profile.quests.dailies = profile.quests.dailies.filter((q) => q.skill !== areaName)
-        profile.quests.habits = profile.quests.habits.filter((q) => q.skill !== areaName)
-      }
-      localStorage.setItem("currentUserProfile", JSON.stringify(profile))
-      localStorage.setItem("currentUserProfile", JSON.stringify(profile))
-      localStorage.setItem(`userProfile_${profile.nickname}`, JSON.stringify(profile))
-      // Removed window.location.reload()
-    }
-
-    // Update other contexts which will handle their own state and localStorage sync
-    removeSkillXP(areaName, 0)
-    delete skillColors[areaName]
-    deleteQuestsBySkill(areaName)
-  }
-
-  const archiveSkill = (skillName: string) => {
-    setAreas((prev) => prev.filter((s) => s !== skillName))
-    setArchivedAreas((prev) => [...prev, skillName])
-  }
-
-  const unarchiveSkill = (skillName: string) => {
-    setArchivedAreas((prev) => prev.filter((s) => s !== skillName))
-    setAreas((prev) => [...prev, skillName])
-  }
-
-  const resetSkills = () => {
-    setAreas([])
-    setArchivedAreas([])
-  }
-
-  const archiveArea = (areaName: string) => {
-    if (!archivedAreas.includes(areaName)) {
-      const nextArchived = [...archivedAreas, areaName]
-      setArchivedAreas(nextArchived)
-      setAreas((prev) => prev.filter((s) => s !== areaName))
-      persistArchived(nextArchived)
-    }
-  }
-
-  const unarchiveArea = (areaName: string) => {
-    if (archivedAreas.includes(areaName)) {
-      const nextArchived = archivedAreas.filter((s) => s !== areaName)
-      setArchivedAreas(nextArchived)
-      setAreas((prev) => (prev.includes(areaName) ? prev : [...prev, areaName]))
-      persistArchived(nextArchived)
-    }
-  }
-
-  const renameArea = (oldName: string, newName: string, newColor?: string) => {
-    const nextName = newName.trim()
-    if (!nextName || nextName === oldName) return
-    setAreas((prev) => prev.map((s) => (s === oldName ? nextName : s)))
-    setArchivedAreas((prev) => prev.map((s) => (s === oldName ? nextName : s)))
-    const storedProfile = localStorage.getItem("currentUserProfile")
-    if (storedProfile) {
-      const profile: UserProfile & { archivedAreas?: string[] } = JSON.parse(storedProfile)
-      if (profile.archivedAreas && profile.archivedAreas.length) {
-        profile.archivedAreas = profile.archivedAreas.map((s) => (s === oldName ? nextName : s))
-      }
-      if (profile.skillColors) {
-        const existingColor = profile.skillColors[oldName]
-        const finalColor = newColor ?? existingColor
-        if (finalColor !== undefined) profile.skillColors[nextName] = finalColor
-        delete profile.skillColors[oldName]
-      }
-      if (profile.skillXPs) {
-        const existingXP = profile.skillXPs[oldName]
-        if (existingXP !== undefined) profile.skillXPs[nextName] = existingXP
-        delete profile.skillXPs[oldName]
-      }
-      if (profile.quests) {
-        profile.quests.plans = profile.quests.plans.map((q) => (q.skill === oldName ? { ...q, skill: nextName } : q))
-        profile.quests.dailies = profile.quests.dailies.map((q) => (q.skill === oldName ? { ...q, skill: nextName } : q))
-        profile.quests.habits = profile.quests.habits.map((q) => (q.skill === oldName ? { ...q, skill: nextName } : q))
-      }
-      localStorage.setItem("currentUserProfile", JSON.stringify(profile))
-      localStorage.setItem(`userProfile_${profile.nickname}`, JSON.stringify(profile))
-    }
-
-    renameAreaXPKey(oldName, nextName)
-    renameAreaColorKey(oldName, nextName)
-    if (newColor) {
-      setAreaColor(nextName, newColor)
-    }
-    ; (["plans", "dailies", "habits"] as const).forEach((category) => {
-      quests[category].forEach((q) => {
-        if (q.skill === oldName) {
-          updateQuest(category, q.id, { skill: nextName })
-        }
-      })
-    })
-  }
-
-  const hasAreas = areas.length > 0
   return (
-    <AreasContext.Provider
-      value={{
-        areas,
-        setAreas,
-        addArea,
-        removeArea,
-        hasAreas,
-        archivedAreas,
-        setArchivedAreas,
-        archiveArea,
-        unarchiveArea,
-        renameArea,
-      }}
-    >
+    <AreasContext.Provider value={{
+      areas,
+      setAreas,
+      archivedAreas,
+      setArchivedAreas,
+      addArea,
+      removeArea,
+      archiveArea,
+      unarchiveArea,
+      renameArea
+    }}>
       {children}
     </AreasContext.Provider>
   )

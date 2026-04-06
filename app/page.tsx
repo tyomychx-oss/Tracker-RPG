@@ -10,121 +10,30 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Award, Check, X, Trash2, Plus, Archive } from "lucide-react"
+import { SyncManager } from "@/components/sync-manager"
 
-// ІМПОРТУЄМО все з нового файлу
+// Import hooks
 import {
   useRecentActivity,
   useNickname,
   useUIColor,
-  type UserProfile
+  useXP,
+  useQuests,
+  useAreaXP,
+  useAreaColors,
+  useSparks,
+  useAreas,
 } from "@/components/providers"
 
 export default function Page() {
   const [showOnboarding, setShowOnboarding] = useState(false)
   const [tempNickname, setTempNickname] = useState("")
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true)
   const [isMobile, setIsMobile] = useState(false)
   const [quickAddOpen, setQuickAddOpen] = useState(false)
 
-  useEffect(() => {
-    const checkAuth = async () => {
-      // First check if we already have a profile in localStorage
-      const storedProfile = localStorage.getItem("currentUserProfile")
-      if (storedProfile) {
-        try {
-          const profile = JSON.parse(storedProfile)
-          if (profile.nickname) {
-            // We have a valid cached profile, skip loading state
-            setIsCheckingAuth(false)
-            return
-          }
-        } catch (e) {
-          // Invalid cached data, continue with normal auth check
-        }
-      }
-
-      const { createClient } = await import("@/utils/supabase/client")
-      const supabase = createClient()
-
-      const { data: { session } } = await supabase.auth.getSession()
-
-      if (!session) {
-        window.location.href = "/auth/sign-in"
-        return
-      }
-
-      const { data: profile, error } = await supabase
-        .from("user_profiles")
-        .select("*")
-        .eq("user_id", session.user.id)
-        .single()
-
-      if (error || !profile || !profile.nickname) {
-        const nicknameFromMetadata = session.user.user_metadata?.nickname
-
-        if (nicknameFromMetadata) {
-          await supabase
-            .from("user_profiles")
-            .upsert({
-              user_id: session.user.id,
-              nickname: nicknameFromMetadata,
-              total_xp: 0,
-              current_level: 1,
-              max_xp: 200,
-              skill_xps: {},
-              skill_colors: {},
-              quests: { plans: [], dailies: [], habits: [] },
-              activities: [],
-              ui_color: "#de6550",
-              task_snapshots: {},
-            }, {
-              onConflict: "user_id"
-            })
-
-          const newProfile: UserProfile = {
-            nickname: nicknameFromMetadata,
-            totalXP: 0,
-            currentLevel: 1,
-            maxXP: 200,
-            skillXPs: {},
-            skillColors: {},
-            quests: { plans: [], dailies: [], habits: [] },
-            activities: [],
-            uiColor: "#de6550",
-            taskSnapshots: {},
-            sparks: 0,
-          }
-
-          localStorage.setItem("currentUserProfile", JSON.stringify(newProfile))
-          setIsCheckingAuth(false)
-          return
-        }
-
-        setShowOnboarding(true)
-        setIsCheckingAuth(false)
-        return
-      }
-
-      const userProfile: UserProfile = {
-        nickname: profile.nickname || "",
-        totalXP: profile.total_xp || 0,
-        currentLevel: profile.current_level || 1,
-        maxXP: profile.max_xp || 200,
-        skillXPs: profile.skill_xps || {},
-        skillColors: profile.skill_colors || {},
-        quests: profile.quests || { plans: [], dailies: [], habits: [] },
-        activities: profile.activities || [],
-        uiColor: profile.ui_color || "#de6550",
-        taskSnapshots: profile.task_snapshots || {},
-        sparks: profile.sparks || 0,
-      }
-
-      localStorage.setItem("currentUserProfile", JSON.stringify(userProfile))
-      setIsCheckingAuth(false)
-    }
-
-    checkAuth()
-  }, [])
+  const { setNickname } = useNickname()
+  const { uiColor } = useUIColor()
+  const { activities } = useRecentActivity()
 
   useEffect(() => {
     const updateDevice = () => {
@@ -170,6 +79,8 @@ export default function Page() {
         activities: [],
         ui_color: "#de6550",
         task_snapshots: {},
+        sparks: 0,
+        archived_areas: []
       }, {
         onConflict: "user_id"
       })
@@ -179,21 +90,8 @@ export default function Page() {
       return
     }
 
-    const newProfile: UserProfile = {
-      nickname: tempNickname.trim(),
-      totalXP: 0,
-      currentLevel: 1,
-      maxXP: 200,
-      skillXPs: {},
-      skillColors: {},
-      quests: { plans: [], dailies: [], habits: [] },
-      activities: [],
-      uiColor: "#de6550",
-      taskSnapshots: {},
-      sparks: 0,
-    }
-
-    localStorage.setItem("currentUserProfile", JSON.stringify(newProfile))
+    // Set nickname and trigger SyncManager to proceed
+    setNickname(tempNickname.trim())
     setShowOnboarding(false)
   }
 
@@ -203,12 +101,8 @@ export default function Page() {
   }
 
   return (
-    <>
-      {isCheckingAuth ? (
-        <div className="min-h-screen bg-background flex items-center justify-center">
-          <div className="text-muted-foreground">Loading...</div>
-        </div>
-      ) : showOnboarding ? (
+    <SyncManager>
+      {showOnboarding ? (
         <OnboardingDialog
           nickname={tempNickname}
           setNickname={setTempNickname}
@@ -227,7 +121,7 @@ export default function Page() {
                   <QuickAdd />
                 )}
               </div>
-              {!quickAddOpen && <MobileRecentActivity />}
+              {!quickAddOpen && <MobileRecentActivity activities={activities} />}
             </div>
           ) : (
             <div className="grid grid-cols-12 gap-6" onClick={handleBackgroundClick}>
@@ -244,7 +138,7 @@ export default function Page() {
           )}
         </>
       )}
-    </>
+    </SyncManager>
   )
 }
 
@@ -257,8 +151,7 @@ function MobileQuickAddButton({ onOpen }: { onOpen: () => void }) {
   )
 }
 
-function MobileRecentActivity() {
-  const { activities } = useRecentActivity()
+function MobileRecentActivity({ activities }: { activities: any[] }) {
   const formatTimestamp = (timestamp: number) => {
     const seconds = Math.floor((Date.now() - timestamp) / 1000)
     if (seconds < 60) return "Just now"

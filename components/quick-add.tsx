@@ -27,9 +27,9 @@ export function QuickAdd() {
     const nameRef = useRef<HTMLInputElement | null>(null)
     const DRAFT_KEY = "quickAddDraft_v1"
 
-    const { activities } = useRecentActivity()
+    const { activities, setActivities } = useRecentActivity()
     const { uiColor } = useUIColor()
-    const { quests } = useQuests()
+    const { quests, setQuests, setLastUpdated } = useQuests()
     const { areas: availableAreas } = useAreas()
 
     useEffect(() => {
@@ -101,11 +101,17 @@ export function QuickAdd() {
         newQuests[taskType].push(base)
 
         const newActivities = [
-            { id: Date.now(), action: `Added: ${taskName}`, timestamp: Date.now(), type: taskType },
+            { id: Date.now(), action: `Added: ${taskName}`, timestamp: Date.now(), type: taskType as "plans" | "dailies" | "habits" },
             ...activities
         ]
 
+        // 1. OPTIMISTIC UPDATE (Instant UI)
+        setQuests(newQuests)
+        setActivities(newActivities as any)
+        setLastUpdated(Date.now())
+
         try {
+            // 2. BACKGROUND SYNC
             await updateProfile({
                 quests: newQuests,
                 activities: newActivities.slice(0, 100)

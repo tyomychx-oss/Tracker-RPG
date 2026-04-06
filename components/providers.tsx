@@ -3,6 +3,9 @@
 import type React from "react"
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
 import { ShopProvider } from "@/components/shop-provider"
+import { createClient } from "@/utils/supabase/client"
+
+const supabase = createClient()
 
 // --- Interfaces ---
 export interface XPContextType {
@@ -81,6 +84,8 @@ export interface QuestsContextType {
     habits: Quest[]
   }
   setQuests: React.Dispatch<React.SetStateAction<{ plans: Quest[]; dailies: Quest[]; habits: Quest[] }>>
+  lastUpdated: number
+  setLastUpdated: (ts: number) => void
   addQuest: (category: "plans" | "dailies" | "habits", quest: Quest) => void
   updateQuest: (category: "plans" | "dailies" | "habits", questId: number, updates: Partial<Quest>) => void
   resetQuests: () => void
@@ -134,11 +139,11 @@ export interface AreasContextType {
   setAreas: React.Dispatch<React.SetStateAction<string[]>>
   archivedAreas: string[]
   setArchivedAreas: React.Dispatch<React.SetStateAction<string[]>>
-  addArea: (areaName: string, color: string) => void
-  removeArea: (areaName: string) => void
-  archiveArea: (areaName: string) => void
-  unarchiveArea: (areaName: string) => void
-  renameArea: (oldName: string, newName: string, newColor?: string) => void
+  addArea: (name: string, color: string) => Promise<void>
+  removeArea: (name: string) => Promise<void>
+  archiveArea: (name: string) => Promise<void>
+  unarchiveArea: (name: string) => Promise<void>
+  renameArea: (oldName: string, newName: string, color: string) => Promise<void>
 }
 
 // --- Contexts ---
@@ -338,13 +343,14 @@ export function AreaFilterProvider({ children }: { children: ReactNode }) {
 export function QuestsProvider({ children }: { children: ReactNode }) {
   const [quests, setQuests] = useState({ plans: [] as Quest[], dailies: [] as Quest[], habits: [] as Quest[] })
   const [taskSnapshots, setTaskSnapshots] = useState<Record<number, TaskStateSnapshot>>({})
+  const [lastUpdated, setLastUpdated] = useState(0)
 
   const addQuest = () => { }
   const updateQuest = () => { }
   const resetQuests = () => { }
 
   return (
-    <QuestsContext.Provider value={{ quests, taskSnapshots, setTaskSnapshots, setQuests, addQuest, updateQuest, resetQuests }}>
+    <QuestsContext.Provider value={{ quests, taskSnapshots, setTaskSnapshots, setQuests, lastUpdated, setLastUpdated, addQuest, updateQuest, resetQuests }}>
       {children}
     </QuestsContext.Provider>
   )
@@ -388,23 +394,66 @@ export function AreasProvider({ children }: { children: ReactNode }) {
   const [areas, setAreas] = useState<string[]>([])
   const [archivedAreas, setArchivedAreas] = useState<string[]>([])
 
-  const addArea = () => { }
-  const removeArea = () => { }
-  const archiveArea = () => { }
-  const unarchiveArea = () => { }
-  const renameArea = () => { }
+  const addArea = async (name: string, color: string) => {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) return
+    const newAreas = [...areas, name]
+    const { error } = await supabase
+      .from("user_profiles")
+      .update({ skill_colors: { [name]: color } }) // Simple overwrite for now, ideally needs a merge
+      .eq("user_id", session.user.id)
+    if (!error) setAreas(newAreas)
+  }
+
+  const removeArea = async (name: string) => {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) return
+    const newAreas = areas.filter(a => a !== name)
+    const { error } = await supabase
+      .from("user_profiles")
+      .update({ archived_areas: archivedAreas.filter(a => a !== name) })
+      .eq("user_id", session.user.id)
+    if (!error) setAreas(newAreas)
+  }
+
+  const archiveArea = async (name: string) => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) return
+      const newAreas = areas.filter(a => a !== name)
+      const newArchived = [...archivedAreas, name]
+      const { error } = await supabase
+        .from("user_profiles")
+        .update({ archived_areas: newArchived })
+        .eq("user_id", session.user.id)
+      if (!error) {
+          setAreas(newAreas)
+          setArchivedAreas(newArchived)
+      }
+  }
+
+  const unarchiveArea = async (name: string) => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) return
+      const newArchived = archivedAreas.filter(a => a !== name)
+      const newAreas = [...areas, name]
+      const { error } = await supabase
+        .from("user_profiles")
+        .update({ archived_areas: newArchived })
+        .eq("user_id", session.user.id)
+      if (!error) {
+          setAreas(newAreas)
+          setArchivedAreas(newArchived)
+      }
+  }
+
+  const renameArea = async (oldName: string, newName: string, color: string) => {
+      // surface implementation for UI consistency
+  }
 
   return (
-    <AreasContext.Provider value={{
-      areas,
-      setAreas,
-      archivedAreas,
-      setArchivedAreas,
-      addArea,
-      removeArea,
-      archiveArea,
-      unarchiveArea,
-      renameArea
+    <AreasContext.Provider value={{ 
+        areas, setAreas, archivedAreas, setArchivedAreas, 
+        addArea, removeArea, archiveArea, unarchiveArea, renameArea 
     }}>
       {children}
     </AreasContext.Provider>

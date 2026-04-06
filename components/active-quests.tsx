@@ -18,14 +18,14 @@ import { syncQuestCompletion, updateQuests, updateProfile } from "@/lib/supabase
 import { addXPToState, removeXPFromState } from "@/lib/rpg-logic"
 
 export function ActiveQuests() {
-    const { quests, taskSnapshots } = useQuests()
-    const { totalXP, currentLevel, maxXP } = useXP()
-    const { areaXPs } = useAreaXP()
+    const { quests, taskSnapshots, setQuests, setTaskSnapshots, lastUpdated, setLastUpdated } = useQuests()
+    const { totalXP, currentLevel, maxXP, setXPState } = useXP()
+    const { areaXPs, setAreaXPs } = useAreaXP()
     const { areaColors } = useAreaColors()
     const { selectedAreas } = useAreaFilter()
-    const { activities } = useRecentActivity()
+    const { activities, setActivities } = useRecentActivity()
     const { uiColor } = useUIColor()
-    const { sparks } = useSparks()
+    const { sparks, setSparks } = useSparks()
     const { areas: availableAreas } = useAreas()
 
     const [showArchived, setShowArchived] = useState({
@@ -126,8 +126,23 @@ export function ActiveQuests() {
             }
         }
 
-        // SYNC EVERYTHING IN ONE SHOT
+        const newSkillXPs = { ...areaXPs }
+        if (skillName && skillName !== "none") {
+            newSkillXPs[skillName] = Math.max(0, (newSkillXPs[skillName] || 0) + (isCompleted ? -xpAmount : xpAmount))
+        }
+        const newSparks = Math.max(0, (sparks || 0) + sparkChange)
+
+        // 1. OPTIMISTIC UPDATE
+        setQuests(newQuests)
+        setXPState(newXpState)
+        setAreaXPs(newSkillXPs)
+        setActivities(newActivities as any)
+        setTaskSnapshots(newSnapshots)
+        setLastUpdated(Date.now())
+        if (typeof setSparks === 'function') setSparks(newSparks)
+
         try {
+            // 2. BACKGROUND SYNC
             await syncQuestCompletion({
                 category,
                 questId,
@@ -157,10 +172,19 @@ export function ActiveQuests() {
             ...activities
         ]
 
-        await updateProfile({
-            quests: newQuests,
-            activities: newActivities.slice(0, 100)
-        })
+        // OPTIMISTIC
+        setQuests(newQuests)
+        setActivities(newActivities as any)
+        setLastUpdated(Date.now())
+
+        try {
+            await updateProfile({
+                quests: newQuests,
+                activities: newActivities.slice(0, 100)
+            })
+        } catch (err) {
+            console.error("Archive failed:", err)
+        }
     }
 
     const handleUnarchiveQuest = async (category: "plans" | "dailies" | "habits", questId: number, xpAmount: number, skillName: string) => {
@@ -177,13 +201,23 @@ export function ActiveQuests() {
             newSkillXPs[skillName] = Math.max(0, (newSkillXPs[skillName] || 0) - xpAmount)
         }
 
-        await updateProfile({
-            quests: newQuests,
-            totalXP: newXp.totalXP,
-            currentLevel: newXp.currentLevel,
-            maxXP: newXp.maxXP,
-            skillXPs: newSkillXPs
-        })
+        // OPTIMISTIC
+        setQuests(newQuests)
+        setXPState(newXp)
+        setAreaXPs(newSkillXPs)
+        setLastUpdated(Date.now())
+
+        try {
+            await updateProfile({
+                quests: newQuests,
+                totalXP: newXp.totalXP,
+                currentLevel: newXp.currentLevel,
+                maxXP: newXp.maxXP,
+                skillXPs: newSkillXPs
+            })
+        } catch (err) {
+            console.error("Unarchive failed:", err)
+        }
     }
 
     const handleDeleteQuest = async (category: "plans" | "dailies" | "habits", questId: number, questTitle: string) => {
@@ -195,10 +229,19 @@ export function ActiveQuests() {
             ...activities
         ]
 
-        await updateProfile({
-            quests: newQuests,
-            activities: newActivities.slice(0, 100)
-        })
+        // OPTIMISTIC
+        setQuests(newQuests)
+        setActivities(newActivities as any)
+        setLastUpdated(Date.now())
+
+        try {
+            await updateProfile({
+                quests: newQuests,
+                activities: newActivities.slice(0, 100)
+            })
+        } catch (err) {
+            console.error("Delete failed:", err)
+        }
     }
 
     const handleSaveQuest = async () => {
@@ -221,7 +264,15 @@ export function ActiveQuests() {
             }
         }
 
-        await updateQuests(newQuests)
+        // OPTIMISTIC
+        setQuests(newQuests)
+        setLastUpdated(Date.now())
+
+        try {
+            await updateQuests(newQuests)
+        } catch (err) {
+            console.error("Save failed:", err)
+        }
         setEditingQuest(null)
     }
 
@@ -233,7 +284,15 @@ export function ActiveQuests() {
                 s.id === subtaskId ? { ...s, completed: !s.completed } : s
             )
         }
-        await updateQuests(newQuests)
+        // OPTIMISTIC
+        setQuests(newQuests)
+        setLastUpdated(Date.now())
+
+        try {
+            await updateQuests(newQuests)
+        } catch (err) {
+            console.error("Subtask toggle failed:", err)
+        }
     }
 
     const handlePinQuest = async (category: "plans" | "dailies" | "habits", questId: number, isPinned: boolean) => {
@@ -243,7 +302,15 @@ export function ActiveQuests() {
             newQuests[category][qIdx].pinned = !isPinned
             newQuests[category][qIdx].pinnedOrder = isPinned ? undefined : Date.now()
         }
-        await updateQuests(newQuests)
+        // OPTIMISTIC
+        setQuests(newQuests)
+        setLastUpdated(Date.now())
+
+        try {
+            await updateQuests(newQuests)
+        } catch (err) {
+            console.error("Pin failed:", err)
+        }
     }
 
     const handleEditQuest = (quest: any, category: "plans" | "dailies" | "habits") => {
@@ -286,7 +353,15 @@ export function ActiveQuests() {
             if (qIdx !== -1) newQuests[category][qIdx].pinnedOrder = index
         })
 
-        await updateQuests(newQuests)
+        // OPTIMISTIC
+        setQuests(newQuests)
+        setLastUpdated(Date.now())
+
+        try {
+            await updateQuests(newQuests)
+        } catch (err) {
+            console.error("Reorder failed:", err)
+        }
         setDraggedQuest(null)
     }
 

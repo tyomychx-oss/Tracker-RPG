@@ -27,7 +27,13 @@ export function SyncManager({ children }: SyncManagerProps) {
   const [userId, setUserId] = useState<string | null>(null)
 
   const { setXPState } = useXP()
-  const { setQuests, setTaskSnapshots } = useQuests()
+  const { setQuests, setTaskSnapshots, lastUpdated } = useQuests()
+  const lastUpdateRef = React.useRef(lastUpdated)
+  
+  // Keep ref in sync
+  React.useEffect(() => {
+    lastUpdateRef.current = lastUpdated
+  }, [lastUpdated])
   const { setAreaXPs } = useAreaXP()
   const { setAreaColors } = useAreaColors()
   const { setActivities } = useRecentActivity()
@@ -128,7 +134,15 @@ export function SyncManager({ children }: SyncManagerProps) {
         (payload) => {
           const newData = payload.new as any
           console.log("[Sync] Profile update received via Realtime")
-          
+
+          // PROTECT AGAINST REVERTS:
+          // If we recently performed a local update, ignore Realtime for a short window
+          // or if the incoming data is potentially older/stale.
+          const now = Date.now()
+          if (now - lastUpdateRef.current < 3000) {
+            console.log("[Sync] Skipping Realtime update (Too recent after local action)")
+            return
+          }
           if (newData.total_xp !== undefined) {
             setXPState({
               totalXP: newData.total_xp,
@@ -175,7 +189,7 @@ export function SyncManager({ children }: SyncManagerProps) {
       console.log(`[Sync] Realtime status change: ${status}`)
       if (status === "SUBSCRIBED") {
         setRealtimeStatus("connected")
-      } else if (status === "RETRYING") {
+      } else if (status === "TIMED_OUT") {
         setRealtimeStatus("connecting")
       } else {
         setRealtimeStatus("disconnected")

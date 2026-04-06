@@ -10,8 +10,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Award, Check, X, Trash2, Plus, Archive } from "lucide-react"
+import { SyncManager } from "@/components/sync-manager"
 
-// ІМПОРТУЄМО все з нового файлу
+// Import hooks
 import {
   useRecentActivity,
   useNickname,
@@ -22,119 +23,17 @@ import {
   useAreaColors,
   useSparks,
   useAreas,
-  type UserProfile
 } from "@/components/providers"
 
 export default function Page() {
   const [showOnboarding, setShowOnboarding] = useState(false)
   const [tempNickname, setTempNickname] = useState("")
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true)
   const [isMobile, setIsMobile] = useState(false)
   const [quickAddOpen, setQuickAddOpen] = useState(false)
 
-  const { setXPState } = useXP()
-  const { setQuests, setTaskSnapshots } = useQuests()
-  const { setAreaXPs } = useAreaXP()
-  const { setAreaColors } = useAreaColors()
-  const { setActivities } = useRecentActivity()
-  const { setUIColor } = useUIColor()
   const { setNickname } = useNickname()
-  const { setSparks } = useSparks()
-  const { setAreas, setArchivedAreas } = useAreas()
-
-  useEffect(() => {
-    const checkAuth = async () => {
-      const { createClient } = await import("@/utils/supabase/client")
-      const supabase = createClient()
-
-      const { data: { session } } = await supabase.auth.getSession()
-
-      if (!session) {
-        window.location.href = "/auth/sign-in"
-        return
-      }
-
-      const { data: profile, error } = await supabase
-        .from("user_profiles")
-        .select("*")
-        .eq("user_id", session.user.id)
-        .single()
-
-      if (error || !profile || !profile.nickname) {
-        const nicknameFromMetadata = session.user.user_metadata?.nickname
-
-        if (nicknameFromMetadata) {
-          const defaultProfile = {
-            user_id: session.user.id,
-            nickname: nicknameFromMetadata,
-            total_xp: 0,
-            current_level: 1,
-            max_xp: 200,
-            skill_xps: {},
-            skill_colors: {},
-            quests: { plans: [], dailies: [], habits: [] },
-            activities: [],
-            ui_color: "#de6550",
-            task_snapshots: {},
-            sparks: 0,
-            archived_areas: []
-          }
-
-          await supabase
-            .from("user_profiles")
-            .upsert(defaultProfile, {
-              onConflict: "user_id"
-            })
-
-          // Populate providers with defaults
-          setNickname(nicknameFromMetadata)
-          setXPState({ totalXP: 0, currentLevel: 1, maxXP: 200 })
-          setAreaXPs({})
-          setAreaColors({})
-          setQuests({ plans: [], dailies: [], habits: [] })
-          setActivities([])
-          setUIColor("#de6550")
-          setTaskSnapshots({})
-          setSparks(0)
-          setAreas([])
-          setArchivedAreas([])
-          
-          setIsCheckingAuth(false)
-          return
-        }
-
-        setShowOnboarding(true)
-        setIsCheckingAuth(false)
-        return
-      }
-
-      // POPULATE PROVIDERS FROM SUPABASE
-      console.log("[Initial Load] Populating state from Supabase for:", profile.nickname)
-      setNickname(profile.nickname || "")
-      setXPState({
-        totalXP: profile.total_xp || 0,
-        currentLevel: profile.current_level || 1,
-        maxXP: profile.max_xp || 200,
-      })
-      setAreaXPs(profile.skill_xps || {})
-      setAreaColors(profile.skill_colors || {})
-      setQuests(profile.quests || { plans: [], dailies: [], habits: [] })
-      setActivities(profile.activities || [])
-      setUIColor(profile.ui_color || "#de6550")
-      setTaskSnapshots(profile.task_snapshots || {})
-      setSparks(profile.sparks || 0)
-      
-      const skillColors = profile.skill_colors || {}
-      const archived = profile.archived_areas || []
-      const allAreaNames = Object.keys(skillColors)
-      setAreas(allAreaNames.filter(name => !archived.includes(name)))
-      setArchivedAreas(archived)
-
-      setIsCheckingAuth(false)
-    }
-
-    checkAuth()
-  }, [])
+  const { uiColor } = useUIColor()
+  const { activities } = useRecentActivity()
 
   useEffect(() => {
     const updateDevice = () => {
@@ -191,19 +90,8 @@ export default function Page() {
       return
     }
 
-    // Populate providers for the newly created user
+    // Set nickname and trigger SyncManager to proceed
     setNickname(tempNickname.trim())
-    setXPState({ totalXP: 0, currentLevel: 1, maxXP: 200 })
-    setAreaXPs({})
-    setAreaColors({})
-    setQuests({ plans: [], dailies: [], habits: [] })
-    setActivities([])
-    setUIColor("#de6550")
-    setTaskSnapshots({})
-    setSparks(0)
-    setAreas([])
-    setArchivedAreas([])
-
     setShowOnboarding(false)
   }
 
@@ -213,12 +101,8 @@ export default function Page() {
   }
 
   return (
-    <>
-      {isCheckingAuth ? (
-        <div className="min-h-screen bg-background flex items-center justify-center">
-          <div className="text-muted-foreground">Loading...</div>
-        </div>
-      ) : showOnboarding ? (
+    <SyncManager>
+      {showOnboarding ? (
         <OnboardingDialog
           nickname={tempNickname}
           setNickname={setTempNickname}
@@ -237,7 +121,7 @@ export default function Page() {
                   <QuickAdd />
                 )}
               </div>
-              {!quickAddOpen && <MobileRecentActivity />}
+              {!quickAddOpen && <MobileRecentActivity activities={activities} />}
             </div>
           ) : (
             <div className="grid grid-cols-12 gap-6" onClick={handleBackgroundClick}>
@@ -254,7 +138,7 @@ export default function Page() {
           )}
         </>
       )}
-    </>
+    </SyncManager>
   )
 }
 
@@ -267,8 +151,7 @@ function MobileQuickAddButton({ onOpen }: { onOpen: () => void }) {
   )
 }
 
-function MobileRecentActivity() {
-  const { activities } = useRecentActivity()
+function MobileRecentActivity({ activities }: { activities: any[] }) {
   const formatTimestamp = (timestamp: number) => {
     const seconds = Math.floor((Date.now() - timestamp) / 1000)
     if (seconds < 60) return "Just now"

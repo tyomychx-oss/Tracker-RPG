@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -15,871 +14,617 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Pencil, ChevronDown, ChevronUp, Trash2, Plus, X, Zap, Pin, PinOff, GripVertical } from "lucide-react"
 import { useXP, useAreaColors, useAreaFilter, useRecentActivity, useUIColor, useAreaXP, useQuests, useSparks, useAreas } from "@/components/providers"
 import { createClient } from "@/utils/supabase/client"
-
-interface TaskStateSnapshot {
-  questId: number
-  previousLevel: number
-  previousXP: number
-  previousMaxXP: number
-  previousSkillXP: number
-}
+import { syncQuestCompletion, updateQuests, updateProfile } from "@/lib/supabase-actions"
+import { addXPToState, removeXPFromState } from "@/lib/rpg-logic"
 
 export function ActiveQuests() {
-  const { quests, updateQuest, deleteQuest, taskSnapshots, setTaskSnapshots } = useQuests()
-  const { addXP, removeXP, currentLevel, totalXP, maxXP, restorePreviousState } = useXP()
-  const { addAreaXP, removeAreaXP, areaXPs } = useAreaXP()
-  const { areaColors } = useAreaColors()
-  const { selectedAreas } = useAreaFilter()
-  const { addActivity } = useRecentActivity()
-  const { uiColor } = useUIColor()
-  const { addSparks, removeSparks } = useSparks()
-  const { areas: availableAreas } = useAreas()
+    const { quests, taskSnapshots } = useQuests()
+    const { totalXP, currentLevel, maxXP } = useXP()
+    const { areaXPs } = useAreaXP()
+    const { areaColors } = useAreaColors()
+    const { selectedAreas } = useAreaFilter()
+    const { activities } = useRecentActivity()
+    const { uiColor } = useUIColor()
+    const { sparks } = useSparks()
+    const { areas: availableAreas } = useAreas()
 
-  const [showArchived, setShowArchived] = useState({
-    plans: false,
-    dailies: false,
-    habits: false,
-  })
+    const [showArchived, setShowArchived] = useState({
+        plans: false,
+        dailies: false,
+        habits: false,
+    })
 
-  const [editingQuest, setEditingQuest] = useState<{
-    id: number
-    category: "plans" | "dailies" | "habits"
-    title: string
-    skill: string
-    xp: number
-    rating: string
-    frequency?: number
-    frequencyCount?: number
-    frequencyPeriodDays?: number
-    resetTime?: string
-    streak?: number
-    subtasks?: { id: string; title: string; completed: boolean }[]
-  } | null>(null)
+    const [editingQuest, setEditingQuest] = useState<{
+        id: number
+        category: "plans" | "dailies" | "habits"
+        title: string
+        skill: string
+        xp: number
+        rating: string
+        frequency?: number
+        frequencyCount?: number
+        frequencyPeriodDays?: number
+        resetTime?: string
+        streak?: number
+        subtasks?: { id: string; title: string; completed: boolean }[]
+    } | null>(null)
 
-  // Drag and drop state
-  const [draggedQuest, setDraggedQuest] = useState<{ id: number; category: "plans" | "dailies" | "habits" } | null>(null)
+    const [draggedQuest, setDraggedQuest] = useState<{ id: number; category: "plans" | "dailies" | "habits" } | null>(null)
 
-  // Daily Reset Logic
-  useEffect(() => {
-    const checkDailyReset = () => {
-      const now = new Date()
-      const utcHour = now.getUTCHours().toString().padStart(2, "0")
-      const utcMinute = now.getUTCMinutes().toString().padStart(2, "0")
-      const currentUTC = `${utcHour}:${utcMinute}`
-      const todayString = now.toDateString()
-      const todayStartUTC = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+    // 1. QUEST COMPLETION / TOGGLE
+    const handleToggleQuest = async (
+        category: "plans" | "dailies" | "habits",
+        questId: number,
+        xpAmount: number,
+        isCompleted: boolean,
+        questTitle: string,
+        skillName: string,
+    ) => {
+        const today = new Date().toDateString()
+        const questObj = quests[category].find((q: any) => q.id === questId) as any
+        if (!questObj) return
 
-        ; (["dailies", "habits"] as const).forEach((category) => {
-          quests[category].forEach((quest: any) => {
-            const resetAt = quest.resetTime || "00:00"
-            if (quest.lastResetDate !== todayString && currentUTC >= resetAt) {
-              if (category === "dailies") {
-                const periodDays = quest.frequencyPeriodDays || 1
-                const periodStart = typeof quest.periodStartAt === "number" ? quest.periodStartAt : todayStartUTC
-                const daysElapsed = Math.floor((todayStartUTC - periodStart) / 86400000)
-                const shouldResetCount = daysElapsed >= periodDays
+        let newQuests = JSON.parse(JSON.stringify(quests))
+        let newXpState = { totalXP, currentLevel, maxXP }
+        let sparkChange = 0
+        let newActivities = [...activities]
+        let newSnapshots = { ...taskSnapshots }
 
-                const updates: any = {
-                  completed: false,
-                  lastCompletedDate: null,
-                  lastResetDate: todayString,
-                }
-
-                if (shouldResetCount) {
-                  updates.completedCount = 0
-                  updates.periodStartAt = todayStartUTC
-                }
-                updateQuest(category, quest.id, updates)
-              } else {
-                updateQuest(category, quest.id, {
-                  completed: false,
-                  lastCompletedDate: null,
-                  lastResetDate: todayString,
-                } as any)
-              }
-            }
-          })
-        })
-    }
-
-    checkDailyReset()
-    const interval = setInterval(checkDailyReset, 60000) // Check every minute
-
-    return () => clearInterval(interval)
-  }, [quests, updateQuest])
-
-  const handleToggleQuest = (
-    category: "plans" | "dailies" | "habits",
-    questId: number,
-    xpAmount: number,
-    isCompleted: boolean,
-    questTitle: string,
-    skillName: string,
-  ) => {
-    const today = new Date().toDateString()
-    const questObj = quests[category].find((q: any) => q.id === questId) as any
-
-    if (isCompleted) {
-      // UNCOMPLETE TASK
-      const snapshot = taskSnapshots[questId]
-      if (snapshot) {
-        // Use snapshot to restore exact previous state
-        restorePreviousState(snapshot.previousLevel, snapshot.previousXP, snapshot.previousMaxXP)
-
-        // Restore skill XP to previous amount
-        const currentSkillXP = areaXPs[skillName] || 0
-        const xpToRemove = currentSkillXP - snapshot.previousSkillXP
-        if (xpToRemove > 0 && skillName) {
-          removeAreaXP(skillName, xpToRemove)
-        }
-
-        // Remove Sparks logic
         const reward = (questObj as any)?.reward || (questObj?.rating === "fast" ? 5 : questObj?.rating === "short" ? 10 : questObj?.rating === "deep" ? 25 : questObj?.rating === "hard" ? 50 : 0)
-        removeSparks(reward)
 
-        // Remove snapshot
-        setTaskSnapshots((prev) => {
-          const newSnapshots = { ...prev }
-          delete newSnapshots[questId]
-          return newSnapshots
-        })
-      } else {
-        // Fallback
-        removeXP(xpAmount)
-        if (skillName) {
-          removeAreaXP(skillName, xpAmount)
+        if (isCompleted) {
+            // UNCOMPLETE
+            const snapshot = taskSnapshots[questId]
+            if (snapshot) {
+                newXpState = {
+                    totalLevel: snapshot.previousLevel, // We'll map these correctly in rpb-logic if needed, but for now just use directly
+                    totalXP: snapshot.previousXP,
+                    currentLevel: snapshot.previousLevel,
+                    maxXP: snapshot.previousMaxXP
+                } as any
+                delete newSnapshots[questId]
+            } else {
+                newXpState = removeXPFromState(totalXP, currentLevel, xpAmount)
+            }
+            sparkChange = -reward
+            newActivities = [{ id: Date.now(), action: `Uncompleted: ${questTitle}`, timestamp: Date.now(), xp: -xpAmount, type: category }, ...newActivities]
+
+            const qIdx = newQuests[category].findIndex((q: any) => q.id === questId)
+            if (qIdx !== -1) {
+                newQuests[category][qIdx].completed = false
+                newQuests[category][qIdx].lastCompletedDate = null
+            }
+        } else {
+            // COMPLETE
+            newSnapshots[questId] = {
+                questId,
+                previousLevel: currentLevel,
+                previousXP: totalXP,
+                previousMaxXP: maxXP,
+                previousSkillXP: areaXPs[skillName] || 0,
+            }
+            newXpState = addXPToState(totalXP, currentLevel, xpAmount)
+            sparkChange = reward
+            newActivities = [{ id: Date.now(), action: `Completed: ${questTitle}`, timestamp: Date.now(), xp: xpAmount, type: category, sparks: reward }, ...newActivities]
+
+            const qIdx = newQuests[category].findIndex((q: any) => q.id === questId)
+            if (qIdx !== -1) {
+                if (category === "habits") {
+                    newQuests[category][qIdx].streak = (newQuests[category][qIdx].streak || 0) + 1
+                    newQuests[category][qIdx].completed = true
+                    newQuests[category][qIdx].lastCompletedDate = today
+                } else if (category === "dailies") {
+                    const freq = questObj?.frequencyCount ?? questObj?.frequency ?? 1
+                    const count = (questObj?.completedCount || 0) + 1
+                    newQuests[category][qIdx].completed = count >= freq
+                    newQuests[category][qIdx].completedCount = count
+                    newQuests[category][qIdx].lastCompletedDate = today
+                } else {
+                    newQuests[category][qIdx].completed = true
+                    newQuests[category][qIdx].lastCompletedDate = today
+                }
+            }
         }
-      }
 
-      addActivity(`Uncompleted: ${questTitle}`, -xpAmount, category)
-      updateQuest(category, questId, { completed: false, lastCompletedDate: null })
+        // SYNC EVERYTHING IN ONE SHOT
+        try {
+            await syncQuestCompletion({
+                category,
+                questId,
+                isCompleted: !isCompleted,
+                xpChange: isCompleted ? -xpAmount : xpAmount,
+                sparkChange,
+                skillName,
+                newQuestData: newQuests,
+                newActivities: newActivities.slice(0, 100),
+                newSnapshots,
+                xpState: newXpState
+            })
+        } catch (err) {
+            console.error("Toggle sync failed:", err)
+        }
+    }
 
-    } else {
-      // COMPLETE TASK
-      const snapshot: TaskStateSnapshot = {
-        questId,
-        previousLevel: currentLevel,
-        previousXP: totalXP,
-        previousMaxXP: maxXP,
-        previousSkillXP: areaXPs[skillName] || 0,
-      }
-      setTaskSnapshots((prev) => ({ ...prev, [questId]: snapshot }))
+    const handleArchiveQuest = async (category: "plans" | "dailies" | "habits", questId: number, questTitle: string) => {
+        const newQuests = JSON.parse(JSON.stringify(quests))
+        const qIdx = newQuests[category].findIndex((q: any) => q.id === questId)
+        if (qIdx !== -1) {
+            newQuests[category][qIdx].archivedAt = Date.now()
+        }
 
-      // Add XP
-      console.log("[DEBUG] handleToggleQuest - completing task:", { questId, xpAmount, skillName, questObj })
-      addXP(xpAmount)
-      if (skillName) {
-        console.log("[DEBUG] Adding area XP for:", skillName)
-        addAreaXP(skillName, xpAmount)
-      } else {
-        console.log("[DEBUG] No skillName, skipping addAreaXP")
-      }
+        const newActivities = [
+            { id: Date.now(), action: `Archived: ${questTitle}`, timestamp: Date.now() },
+            ...activities
+        ]
 
-      // Add Sparks logic
-      const reward = (questObj as any)?.reward || (questObj?.rating === "fast" ? 5 : questObj?.rating === "short" ? 10 : questObj?.rating === "deep" ? 25 : questObj?.rating === "hard" ? 50 : 0)
-      addSparks(reward)
-
-      addActivity(`Completed: ${questTitle}`, xpAmount, category, reward) // Fixed duplicate calls here
-
-      if (category === "habits") {
-        const currentStreak = (questObj?.streak || 0) + 1
-        updateQuest(category, questId, {
-          completed: true,
-          lastCompletedDate: today,
-          streak: currentStreak,
+        await updateProfile({
+            quests: newQuests,
+            activities: newActivities.slice(0, 100)
         })
-      } else if (category === "dailies") {
-        const freq = questObj?.frequencyCount ?? questObj?.frequency ?? 1
-        const count = (questObj?.completedCount || 0) + 1
-        updateQuest(category, questId, {
-          completed: count >= freq,
-          lastCompletedDate: today,
-          completedCount: count,
-        } as any)
-      } else {
-        updateQuest(category, questId, { completed: true, lastCompletedDate: today })
-      }
     }
-  }
 
-  const handleArchiveQuest = (category: "plans" | "dailies" | "habits", questId: number, questTitle: string) => {
-    updateQuest(category, questId, { archivedAt: Date.now() })
-    addActivity(`Archived: ${questTitle}`)
-  }
+    const handleUnarchiveQuest = async (category: "plans" | "dailies" | "habits", questId: number, xpAmount: number, skillName: string) => {
+        const newQuests = JSON.parse(JSON.stringify(quests))
+        const qIdx = newQuests[category].findIndex((q: any) => q.id === questId)
+        if (qIdx !== -1) {
+            newQuests[category][qIdx].archivedAt = null
+            newQuests[category][qIdx].completed = false
+        }
 
-  const handleUnarchiveQuest = (
-    category: "plans" | "dailies" | "habits",
-    questId: number,
-    xpAmount: number,
-    skillName: string,
-  ) => {
-    removeXP(xpAmount)
-    if (skillName) {
-      removeAreaXP(skillName, xpAmount)
+        const newXp = removeXPFromState(totalXP, currentLevel, xpAmount)
+        const newSkillXPs = { ...areaXPs }
+        if (skillName && skillName !== "none") {
+            newSkillXPs[skillName] = Math.max(0, (newSkillXPs[skillName] || 0) - xpAmount)
+        }
+
+        await updateProfile({
+            quests: newQuests,
+            totalXP: newXp.totalXP,
+            currentLevel: newXp.currentLevel,
+            maxXP: newXp.maxXP,
+            skillXPs: newSkillXPs
+        })
     }
-    updateQuest(category, questId, { completed: false, archivedAt: null })
-  }
 
-  const handleEditQuest = (quest: any, category: "plans" | "dailies" | "habits") => {
-    setEditingQuest({
-      id: quest.id,
-      category,
-      title: quest.title,
-      skill: quest.skill,
-      xp: quest.xp,
-      rating: quest.rating,
-      frequency: quest.frequency,
-      frequencyCount: quest.frequencyCount,
-      frequencyPeriodDays: quest.frequencyPeriodDays,
-      resetTime: quest.resetTime,
-      subtasks: quest.subtasks || [],
-    })
-  }
+    const handleDeleteQuest = async (category: "plans" | "dailies" | "habits", questId: number, questTitle: string) => {
+        const newQuests = JSON.parse(JSON.stringify(quests))
+        newQuests[category] = newQuests[category].filter((q: any) => q.id !== questId)
 
-  const handleSaveQuest = () => {
-    if (!editingQuest) return
+        const newActivities = [
+            { id: Date.now(), action: `Deleted: ${questTitle}`, timestamp: Date.now() },
+            ...activities
+        ]
 
-    updateQuest(editingQuest.category, editingQuest.id, {
-      title: editingQuest.title,
-      skill: editingQuest.skill,
-      xp: editingQuest.xp,
-      rating: editingQuest.rating,
-      frequencyCount: editingQuest.frequencyCount,
-      frequencyPeriodDays: editingQuest.frequencyPeriodDays,
-      resetTime: editingQuest.resetTime,
-      subtasks: editingQuest.subtasks ? editingQuest.subtasks.filter(s => s.title.trim() !== "") : [],
-    })
-    setEditingQuest(null)
-  }
+        await updateProfile({
+            quests: newQuests,
+            activities: newActivities.slice(0, 100)
+        })
+    }
 
-  const handleDeleteQuest = (category: "plans" | "dailies" | "habits", questId: number, questTitle: string) => {
-    deleteQuest(category, questId)
-    addActivity(`Deleted: ${questTitle}`)
-  }
+    const handleSaveQuest = async () => {
+        if (!editingQuest) return
 
-  const handleDragStart = (questId: number, category: "plans" | "dailies" | "habits") => {
-    setDraggedQuest({ id: questId, category })
-  }
+        const newQuests = JSON.parse(JSON.stringify(quests))
+        const qIdx = newQuests[editingQuest.category].findIndex((q: any) => q.id === editingQuest.id)
 
-  const handleDragEnd = () => {
-    setDraggedQuest(null)
-  }
+        if (qIdx !== -1) {
+            newQuests[editingQuest.category][qIdx] = {
+                ...newQuests[editingQuest.category][qIdx],
+                title: editingQuest.title,
+                skill: editingQuest.skill,
+                xp: editingQuest.xp,
+                rating: editingQuest.rating,
+                frequencyCount: editingQuest.frequencyCount,
+                frequencyPeriodDays: editingQuest.frequencyPeriodDays,
+                resetTime: editingQuest.resetTime,
+                subtasks: editingQuest.subtasks ? editingQuest.subtasks.filter(s => s.title.trim() !== "") : [],
+            }
+        }
 
-  const handleDrop = (targetQuestId: number, category: "plans" | "dailies" | "habits") => {
-    if (!draggedQuest || draggedQuest.category !== category) return
-    if (draggedQuest.id === targetQuestId) return
+        await updateQuests(newQuests)
+        setEditingQuest(null)
+    }
 
-    const pinnedQuests = quests[category]
-      .filter((q: any) => q.pinned && q.archivedAt === null)
-      .sort((a: any, b: any) => (a.pinnedOrder ?? Infinity) - (b.pinnedOrder ?? Infinity))
+    const handleToggleSubtask = async (category: "plans" | "dailies" | "habits", questId: number, subtaskId: string) => {
+        const newQuests = JSON.parse(JSON.stringify(quests))
+        const qIdx = newQuests[category].findIndex((q: any) => q.id === questId)
+        if (qIdx !== -1) {
+            newQuests[category][qIdx].subtasks = newQuests[category][qIdx].subtasks.map((s: any) =>
+                s.id === subtaskId ? { ...s, completed: !s.completed } : s
+            )
+        }
+        await updateQuests(newQuests)
+    }
 
-    const draggedIndex = pinnedQuests.findIndex((q: any) => q.id === draggedQuest.id)
-    const targetIndex = pinnedQuests.findIndex((q: any) => q.id === targetQuestId)
+    const handlePinQuest = async (category: "plans" | "dailies" | "habits", questId: number, isPinned: boolean) => {
+        const newQuests = JSON.parse(JSON.stringify(quests))
+        const qIdx = newQuests[category].findIndex((q: any) => q.id === questId)
+        if (qIdx !== -1) {
+            newQuests[category][qIdx].pinned = !isPinned
+            newQuests[category][qIdx].pinnedOrder = isPinned ? undefined : Date.now()
+        }
+        await updateQuests(newQuests)
+    }
 
-    if (draggedIndex === -1 || targetIndex === -1) return
+    const handleEditQuest = (quest: any, category: "plans" | "dailies" | "habits") => {
+        setEditingQuest({
+            id: quest.id,
+            category,
+            title: quest.title,
+            skill: quest.skill,
+            xp: quest.xp,
+            rating: quest.rating,
+            frequency: quest.frequency,
+            frequencyCount: quest.frequencyCount,
+            frequencyPeriodDays: quest.frequencyPeriodDays,
+            resetTime: quest.resetTime,
+            subtasks: quest.subtasks || [],
+        })
+    }
 
-    // Reorder pinned quests
-    const reordered = [...pinnedQuests]
-    const [removed] = reordered.splice(draggedIndex, 1)
-    reordered.splice(targetIndex, 0, removed)
+    // Drag and drop sorting
+    const handleDrop = async (targetQuestId: number, category: "plans" | "dailies" | "habits") => {
+        if (!draggedQuest || draggedQuest.category !== category) return
+        if (draggedQuest.id === targetQuestId) return
 
-    // Update pinnedOrder for all reordered quests
-    reordered.forEach((quest: any, index: number) => {
-      updateQuest(category, quest.id, { pinnedOrder: index })
-    })
+        const pinnedQuests = quests[category]
+            .filter((q: any) => q.pinned && q.archivedAt === null)
+            .sort((a: any, b: any) => (a.pinnedOrder ?? Infinity) - (b.pinnedOrder ?? Infinity))
 
-    setDraggedQuest(null)
-  }
+        const draggedIndex = pinnedQuests.findIndex((q: any) => q.id === draggedQuest.id)
+        const targetIndex = pinnedQuests.findIndex((q: any) => q.id === targetQuestId)
 
-  const BASIC_COLORS = [
-    "#ef4444", "#f97316", "#f59e0b", "#eab308", "#84cc16", "#10b981",
-    "#059669", "#14b8a6", "#06b6d4", "#0ea5e9", "#3b82f6", "#a855f7",
-  ]
+        if (draggedIndex === -1 || targetIndex === -1) return
 
-  const renderQuestCard = (quest: any, category: "plans" | "dailies" | "habits", isArchived = false) => {
-    const skillColor = areaColors[quest.skill] || uiColor
-    const priorityBorder =
-      quest.rating === "fast" ? "border-l-lime-500"
-        : quest.rating === "short" ? "border-l-cyan-400"
-          : quest.rating === "deep" ? "border-l-amber-500"
-            : quest.rating === "hard" ? "border-l-red-500"
-              : "border-l-gray-300"
+        const reordered = [...pinnedQuests]
+        const [removed] = reordered.splice(draggedIndex, 1)
+        reordered.splice(targetIndex, 0, removed)
 
-    const priorityColor =
-      quest.rating === "fast" ? "#84cc16"
-        : quest.rating === "short" ? "#22d3ee"
-          : quest.rating === "deep" ? "#f59e0b"
-            : quest.rating === "hard" ? "#ef4444"
-              : "#d1d5db"
+        const newQuests = JSON.parse(JSON.stringify(quests))
+        reordered.forEach((quest: any, index: number) => {
+            const qIdx = newQuests[category].findIndex((q: any) => q.id === quest.id)
+            if (qIdx !== -1) newQuests[category][qIdx].pinnedOrder = index
+        })
 
-    const isPinned = quest.pinned && !isArchived
-    const hasCategory = !!(quest.skill && quest.skill !== "none")
+        await updateQuests(newQuests)
+        setDraggedQuest(null)
+    }
 
-    return (
-      <div
-        key={quest.id}
-        className={`${isArchived ? "opacity-50" : quest.completed ? "opacity-70" : ""} ${isPinned ? "cursor-grab active:cursor-grabbing" : ""} ${draggedQuest?.id === quest.id ? "opacity-50" : ""}`}
-        draggable={isPinned}
-        onDragStart={isPinned ? () => handleDragStart(quest.id, category) : undefined}
-        onDragEnd={isPinned ? handleDragEnd : undefined}
-        onDragOver={isPinned ? (e) => e.preventDefault() : undefined}
-        onDrop={isPinned ? () => handleDrop(quest.id, category) : undefined}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.background = `linear-gradient(to right, ${priorityColor}15, transparent)`
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background = "transparent"
-        }}
-        style={{
-          padding: "0",
-          borderRadius: "0",
-          background: "transparent",
-          transition: "all 0.3s ease",
-        }}
-      >
-        <div
-          style={{
-            borderRadius: "12px",
-            background: "transparent",
-            border: "1px solid rgba(255, 255, 255, 0.1)",
-            padding: "12px 16px",
-            position: "relative",
-          }}
-        >
-          {/* Left Accent Bar */}
-          <div style={{
-            position: "absolute",
-            left: 0,
-            top: "8px",
-            bottom: "8px",
-            width: "3px",
-            borderRadius: "0 3px 3px 0",
-            background: priorityColor,
-            opacity: 0.7
-          }} />
+    // Helper functions for rendering
+    const priorityOrder: Record<string, number> = { fast: 0, short: 1, deep: 2, hard: 3 }
 
-          <div style={{ display: "flex", alignItems: "flex-start", gap: "12px" }}>
-            {/* Pin icon - positioned relative to checkbox */}
-            <div style={{ position: "relative", flexShrink: 0, marginTop: hasCategory ? "12px" : "0px" }}>
-              {!isArchived && (
-                <button
-                  className="h-4 w-4 p-0 bg-transparent border-none outline-none cursor-pointer group/pin"
-                  style={{
-                    position: "absolute",
-                    top: "-18px",
-                    left: "-13px",
-                  }}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    updateQuest(category, quest.id, { pinned: !quest.pinned, pinnedOrder: quest.pinned ? undefined : Date.now() })
-                  }}
-                >
-                  <Pin
-                    className="h-3 w-3 rotate-45 transition-all duration-200 group-hover/pin:scale-110"
-                    style={isPinned
-                      ? { color: uiColor, filter: `drop-shadow(0 0 4px ${uiColor})` }
-                      : { color: 'var(--muted-foreground)', opacity: 0.15 }
-                    }
-                    onMouseEnter={(e) => {
-                      if (!isPinned) {
-                        e.currentTarget.style.color = '#22d3ee'
-                        e.currentTarget.style.opacity = '1'
-                        e.currentTarget.style.filter = 'drop-shadow(0 0 4px #22d3ee)'
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!isPinned) {
-                        e.currentTarget.style.color = 'var(--muted-foreground)'
-                        e.currentTarget.style.opacity = '0.15'
-                        e.currentTarget.style.filter = 'none'
-                      }
-                    }}
-                  />
-                </button>
-              )}
+    const getActiveQuests = (category: "plans" | "dailies" | "habits") =>
+        quests[category]
+            .filter((q: any) => {
+                const isActive = q.archivedAt === null
+                if (!selectedAreas || selectedAreas.length === 0) return isActive
+                return isActive && selectedAreas.includes(q.skill)
+            })
+            .sort((a: any, b: any) => {
+                if (a.pinned && !b.pinned) return -1
+                if (!a.pinned && b.pinned) return 1
+                if (a.pinned && b.pinned) {
+                    const orderA = a.pinnedOrder ?? Infinity
+                    const orderB = b.pinnedOrder ?? Infinity
+                    return orderA - orderB
+                }
+                const pa = priorityOrder[a.rating] ?? 99
+                const pb = priorityOrder[b.rating] ?? 99
+                return pa - pb
+            })
 
-              <Checkbox
-                checked={quest.completed}
-                onCheckedChange={() => {
-                  handleToggleQuest(category, quest.id, quest.xp, quest.completed, quest.title, quest.skill)
+    const getArchivedQuests = (category: "plans" | "dailies" | "habits") =>
+        quests[category]
+            .filter((q: any) => {
+                if (selectedAreas?.length && !selectedAreas.includes(q.skill)) return false
+                const isArchived = q.archivedAt !== null
+                if (!selectedAreas || selectedAreas.length === 0) return isArchived
+                return isArchived && selectedAreas.includes(q.skill)
+            })
+            .sort((a: any, b: any) => (b.archivedAt || 0) - (a.archivedAt || 0))
+
+    const renderQuestCard = (quest: any, category: "plans" | "dailies" | "habits", isArchived = false) => {
+        const skillColor = areaColors[quest.skill] || uiColor
+        const priorityColor =
+            quest.rating === "fast" ? "#84cc16"
+                : quest.rating === "short" ? "#22d3ee"
+                    : quest.rating === "deep" ? "#f59e0b"
+                        : quest.rating === "hard" ? "#ef4444"
+                            : "#d1d5db"
+
+        const isPinned = quest.pinned && !isArchived
+        const hasCategory = !!(quest.skill && quest.skill !== "none")
+
+        return (
+            <div
+                key={quest.id}
+                className={`${isArchived ? "opacity-50" : quest.completed ? "opacity-70" : ""} ${isPinned ? "cursor-grab active:cursor-grabbing" : ""} ${draggedQuest?.id === quest.id ? "opacity-50" : ""}`}
+                draggable={isPinned}
+                onDragStart={isPinned ? () => setDraggedQuest({ id: quest.id, category }) : undefined}
+                onDragEnd={() => setDraggedQuest(null)}
+                onDragOver={isPinned ? (e) => e.preventDefault() : undefined}
+                onDrop={isPinned ? () => handleDrop(quest.id, category) : undefined}
+                onMouseEnter={(e) => {
+                    e.currentTarget.style.background = `linear-gradient(to right, ${priorityColor}15, transparent)`
                 }}
-                className="h-5 w-5 border border-gray-300"
-                disabled={isArchived}
-              />
-            </div>
-
-            {/* Title - takes all remaining space */}
-            <div style={{ flex: 1, minWidth: 0 }}>
-              {/* Category label */}
-              {quest.skill && quest.skill !== "none" && (
+                onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "transparent"
+                }}
+                style={{
+                    padding: "0",
+                    borderRadius: "0",
+                    background: "transparent",
+                    transition: "all 0.3s ease",
+                }}
+            >
                 <div
-                  style={{
-                    fontSize: "11px",
-                    color: skillColor,
-                    fontFamily: "'Crimson Pro', serif",
-                    letterSpacing: "0.12em",
-                    textTransform: "uppercase",
-                    fontStyle: "italic",
-                    lineHeight: "1",
-                    marginBottom: "2px"
-                  }}
-                >
-                  — {quest.skill}
-                </div>
-              )}
-
-              {/* Quest Title */}
-              <h4 className="font-medium text-foreground" style={{ overflowWrap: 'break-word', wordBreak: 'break-word' }}>
-                {quest.title}
-              </h4>
-
-              {/* Subtasks - nested inside title block to stay in one row */}
-              {quest.subtasks && quest.subtasks.length > 0 && (
-                <div className="space-y-1 mt-2">
-                  {quest.subtasks.map((subtask: any) => (
-                    <div key={subtask.id} className="flex items-center gap-2 text-sm">
-                      <div
-                        className={`h-4 w-4 rounded-full border border-muted-foreground cursor-pointer flex items-center justify-center transition-colors ${subtask.completed ? "bg-primary border-primary" : "hover:border-primary"}`}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          if (isArchived) return
-                          const updatedSubtasks = quest.subtasks.map((s: any) =>
-                            s.id === subtask.id ? { ...s, completed: !s.completed } : s
-                          )
-                          updateQuest(category, quest.id, { subtasks: updatedSubtasks })
-                        }}
-                      >
-                        {subtask.completed && <div className="h-2 w-2 rounded-full bg-white" />}
-                      </div>
-                      <span className={`${subtask.completed ? "line-through text-muted-foreground" : "text-foreground"}`}>
-                        {subtask.title}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Archive Button for Completed Tasks */}
-              {quest.completed && !isArchived && (
-                <div style={{ paddingTop: "8px" }}>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleArchiveQuest(category, quest.id, quest.title)
-                    }}
                     style={{
-                      padding: "8px 28px",
-                      borderRadius: "6px",
-                      border: `1px solid ${priorityColor}30`,
-                      background: "transparent",
-                      color: priorityColor,
-                      fontSize: "12px",
-                      fontWeight: 600,
-                      fontFamily: "'Crimson Pro', serif",
-                      letterSpacing: "0.1em",
-                      textTransform: "uppercase",
-                      fontStyle: "italic",
-                      width: "100%",
-                      cursor: "pointer",
-                      transition: "all 0.25s ease",
+                        borderRadius: "12px",
+                        background: "transparent",
+                        border: "1px solid rgba(255, 255, 255, 0.1)",
+                        padding: "12px 16px",
+                        position: "relative",
                     }}
-                  >
-                    Archive Quest
-                  </button>
+                >
+                    <div style={{
+                        position: "absolute",
+                        left: 0,
+                        top: "8px",
+                        bottom: "8px",
+                        width: "3px",
+                        borderRadius: "0 3px 3px 0",
+                        background: priorityColor,
+                        opacity: 0.7
+                    }} />
+
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: "12px" }}>
+                        <div style={{ position: "relative", flexShrink: 0, marginTop: hasCategory ? "12px" : "0px" }}>
+                            {!isArchived && (
+                                <button
+                                    className="h-4 w-4 p-0 bg-transparent border-none outline-none cursor-pointer group/pin"
+                                    style={{ position: "absolute", top: "-18px", left: "-13px" }}
+                                    onClick={(e) => {
+                                        e.stopPropagation()
+                                        handlePinQuest(category, quest.id, !!quest.pinned)
+                                    }}
+                                >
+                                    <Pin
+                                        className="h-3 w-3 rotate-45 transition-all duration-200 group-hover/pin:scale-110"
+                                        style={isPinned
+                                            ? { color: uiColor, filter: `drop-shadow(0 0 4px ${uiColor})` }
+                                            : { color: 'var(--muted-foreground)', opacity: 0.15 }
+                                        }
+                                    />
+                                </button>
+                            )}
+
+                            <Checkbox
+                                checked={quest.completed}
+                                onCheckedChange={() => {
+                                    handleToggleQuest(category, quest.id, quest.xp, quest.completed, quest.title, quest.skill)
+                                }}
+                                className="h-5 w-5 border border-gray-300"
+                                disabled={isArchived}
+                            />
+                        </div>
+
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                            {quest.skill && quest.skill !== "none" && (
+                                <div style={{ fontSize: "11px", color: skillColor, fontFamily: "'Crimson Pro', serif", letterSpacing: "0.12em", textTransform: "uppercase", fontStyle: "italic", lineHeight: "1", marginBottom: "2px" }}>— {quest.skill}</div>
+                            )}
+                            <h4 className="font-medium text-foreground" style={{ overflowWrap: 'break-word', wordBreak: 'break-word' }}>{quest.title}</h4>
+
+                            {quest.subtasks && quest.subtasks.length > 0 && (
+                                <div className="space-y-1 mt-2">
+                                    {quest.subtasks.map((subtask: any) => (
+                                        <div key={subtask.id} className="flex items-center gap-2 text-sm">
+                                            <div
+                                                className={`h-4 w-4 rounded-full border border-muted-foreground cursor-pointer flex items-center justify-center transition-colors ${subtask.completed ? "bg-primary border-primary" : "hover:border-primary"}`}
+                                                onClick={(e) => { e.stopPropagation(); handleToggleSubtask(category, quest.id, subtask.id) }}
+                                            >
+                                                {subtask.completed && <div className="h-2 w-2 rounded-full bg-white" />}
+                                            </div>
+                                            <span className={`${subtask.completed ? "line-through text-muted-foreground" : "text-foreground"}`}>{subtask.title}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {quest.completed && !isArchived && (
+                                <div style={{ paddingTop: "8px" }}>
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); handleArchiveQuest(category, quest.id, quest.title) }}
+                                        style={{ padding: "8px 28px", borderRadius: "6px", border: `1px solid ${priorityColor}30`, background: "transparent", color: priorityColor, fontSize: "12px", fontWeight: 600, fontFamily: "'Crimson Pro', serif", letterSpacing: "0.1em", textTransform: "uppercase", fontStyle: "italic", width: "100%", cursor: "pointer", transition: "all 0.25s ease" }}
+                                    >
+                                        Archive Quest
+                                    </button>
+                                </div>
+                            )}
+
+                            {isArchived && (
+                                <div style={{ paddingTop: "8px" }}>
+                                    <Button size="sm" variant="outline" className="w-full text-xs bg-transparent" onClick={(e) => { e.stopPropagation(); handleUnarchiveQuest(category, quest.id, quest.xp, quest.skill) }}>Unarchive</Button>
+                                </div>
+                            )}
+                        </div>
+
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", justifyContent: "center", flexShrink: 0, marginTop: hasCategory ? "6px" : "0px" }}>
+                            <span className="text-xs text-muted-foreground font-mono whitespace-nowrap">+{quest.xp} XP</span>
+                            <span className="text-xs text-orange-500 font-mono whitespace-nowrap flex items-center gap-0.5">
+                                <Zap className="h-3 w-3" />
+                                +{(quest as any).reward || (quest.rating === "fast" ? 5 : quest.rating === "short" ? 10 : quest.rating === "deep" ? 25 : quest.rating === "hard" ? 50 : 0)}
+                            </span>
+                        </div>
+
+                        <div className="flex items-center gap-1 opacity-50 flex-shrink-0 ml-1" style={{ marginTop: hasCategory ? "12px" : "0px" }}>
+                            {!isArchived && (
+                                <>
+                                    <button className="h-6 w-6 p-0 bg-transparent border-none outline-none cursor-pointer text-gray-500 hover:text-white flex items-center justify-center hover:drop-shadow-[0_0_4px_rgba(255,255,255,0.7)]" onClick={(e) => { e.stopPropagation(); handleEditQuest(quest, category) }}><Pencil className="h-3 w-3" /></button>
+                                    <button className="h-6 w-6 p-0 bg-transparent border-none outline-none cursor-pointer text-gray-500 hover:text-white flex items-center justify-center hover:drop-shadow-[0_0_4px_rgba(255,255,255,0.7)]" onClick={(e) => { e.stopPropagation(); handleDeleteQuest(category, quest.id, quest.title) }}><Trash2 className="h-3 w-3" /></button>
+                                </>
+                            )}
+                            {category === "habits" && (
+                                <span className="text-xs flex items-center gap-1 ml-1 opacity-100">
+                                    <span>🔥</span>
+                                    {(quest as any).streak || 0}
+                                </span>
+                            )}
+                        </div>
+                    </div>
                 </div>
-              )}
+            </div >
+        )
+    }
 
-              {isArchived && (
-                <div style={{ paddingTop: "8px" }}>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="w-full text-xs bg-transparent"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleUnarchiveQuest(category, quest.id, quest.xp, quest.skill)
-                    }}
-                  >
-                    Unarchive
-                  </Button>
-                </div>
-              )}
+    const renderTabContent = (category: "plans" | "dailies" | "habits") => {
+        const activeQuests = getActiveQuests(category)
+        const archivedQuests = getArchivedQuests(category)
+        const hasArchived = archivedQuests.length > 0
+
+        return (
+            <div className="space-y-3 mt-4">
+                {activeQuests.map((quest: any) => renderQuestCard(quest, category))}
+
+                {hasArchived && (
+                    <div className="pt-4 border-t border-border">
+                        <button
+                            onClick={() => setShowArchived((prev) => ({ ...prev, [category]: !prev[category] }))}
+                            className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 w-full justify-center transition-colors"
+                        >
+                            Archive {showArchived[category] ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                        </button>
+
+                        {showArchived[category] && (
+                            <div className="space-y-3 mt-3">
+                                {archivedQuests.map((quest: any) => renderQuestCard(quest, category, true))}
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
-
-            {/* XP + Sparks stacked */}
-            <div style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "flex-end",
-              justifyContent: "center",
-              flexShrink: 0,
-              marginTop: hasCategory ? "6px" : "0px"
-            }}>
-              <span className="text-xs text-muted-foreground font-mono whitespace-nowrap">+{quest.xp} XP</span>
-              <span className="text-xs text-orange-500 font-mono whitespace-nowrap flex items-center gap-0.5">
-                <Zap className="h-3 w-3" />
-                +{(quest as any).reward || (quest.rating === "fast" ? 5 : quest.rating === "short" ? 10 : quest.rating === "deep" ? 25 : quest.rating === "hard" ? 50 : 0)}
-              </span>
-            </div>
-
-            {/* Edit + Delete + Habit Streak */}
-            <div className="flex items-center gap-1 opacity-50 flex-shrink-0 ml-1" style={{ marginTop: hasCategory ? "12px" : "0px" }}>
-              {!isArchived && (
-                <>
-                  <button
-                    className="h-6 w-6 p-0 bg-transparent border-none outline-none cursor-pointer text-gray-500 hover:text-white transition-all duration-200 flex items-center justify-center hover:drop-shadow-[0_0_4px_rgba(255,255,255,0.7)]"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleEditQuest(quest, category)
-                    }}
-                  >
-                    <Pencil className="h-3 w-3" />
-                  </button>
-                  <button
-                    className="h-6 w-6 p-0 bg-transparent border-none outline-none cursor-pointer text-gray-500 hover:text-white transition-all duration-200 flex items-center justify-center hover:drop-shadow-[0_0_4px_rgba(255,255,255,0.7)]"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleDeleteQuest(category, quest.id, quest.title)
-                    }}
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </button>
-                </>
-              )}
-              {category === "habits" && (
-                <span className="text-xs flex items-center gap-1 ml-1 opacity-100">
-                  <span>🔥</span>
-                  {(quest as any).streak || 0}
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-      </div >
-    )
-  }
-
-  const priorityOrder: Record<string, number> = { fast: 0, short: 1, deep: 2, hard: 3 }
-
-  const getActiveQuests = (category: "plans" | "dailies" | "habits") =>
-    quests[category]
-      .filter((q: any) => {
-        const isActive = q.archivedAt === null
-        if (!selectedAreas || selectedAreas.length === 0) return isActive
-        return isActive && selectedAreas.includes(q.skill)
-      })
-      .sort((a: any, b: any) => {
-        // Закріплені таски завжди зверху
-        if (a.pinned && !b.pinned) return -1
-        if (!a.pinned && b.pinned) return 1
-        // Серед закріплених - сортування за pinnedOrder
-        if (a.pinned && b.pinned) {
-          const orderA = a.pinnedOrder ?? Infinity
-          const orderB = b.pinnedOrder ?? Infinity
-          return orderA - orderB
-        }
-        // Для незакріплених - сортування за пріоритетом
-        const pa = priorityOrder[a.rating] ?? 99
-        const pb = priorityOrder[b.rating] ?? 99
-        return pa - pb
-      })
-
-  const getArchivedQuests = (category: "plans" | "dailies" | "habits") =>
-    quests[category]
-      .filter((q: any) => {
-        if (selectedAreas?.length && !selectedAreas.includes(q.skill)) return false
-        const isArchived = q.archivedAt !== null
-        if (!selectedAreas || selectedAreas.length === 0) return isArchived
-        return isArchived && selectedAreas.includes(q.skill)
-      })
-      .sort((a: any, b: any) => (b.archivedAt || 0) - (a.archivedAt || 0))
-
-  const handleCardClick = (e: React.MouseEvent) => {
-    e.stopPropagation()
-  }
-
-  const renderTabContent = (category: "plans" | "dailies" | "habits") => {
-    const activeQuests = getActiveQuests(category)
-    const archivedQuests = getArchivedQuests(category)
-    const hasArchived = archivedQuests.length > 0
+        )
+    }
 
     return (
-      <div className="space-y-3 mt-4">
-        {activeQuests.map((quest: any) => renderQuestCard(quest, category))}
+        <div className="space-y-4">
+            <Card className="bg-card border-border" onClick={(e) => e.stopPropagation()}>
+                <CardHeader>
+                    <CardTitle className="text-foreground" style={{ color: uiColor }}>
+                        ACTIVE QUESTS
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <Tabs defaultValue="plans" className="w-full">
+                        <TabsList className="grid w-full grid-cols-3 bg-secondary">
+                            <TabsTrigger value="plans">Tasks</TabsTrigger>
+                            <TabsTrigger value="dailies">Daily</TabsTrigger>
+                            <TabsTrigger value="habits">Habits</TabsTrigger>
+                        </TabsList>
+                        <TabsContent value="plans">{renderTabContent("plans")}</TabsContent>
+                        <TabsContent value="dailies">{renderTabContent("dailies")}</TabsContent>
+                        <TabsContent value="habits">{renderTabContent("habits")}</TabsContent>
+                    </Tabs>
+                </CardContent>
+            </Card>
 
-        {hasArchived && (
-          <div className="pt-4 border-t border-border">
-            <button
-              onClick={() => setShowArchived((prev) => ({ ...prev, [category]: !prev[category] }))}
-              className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 w-full justify-center transition-colors"
-            >
-              Archive {showArchived[category] ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-            </button>
-
-            {showArchived[category] && (
-              <div className="space-y-3 mt-3">
-                {archivedQuests.map((quest: any) => renderQuestCard(quest, category, true))}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    )
-  }
-
-  return (
-    <div className="space-y-4">
-      <Card className="bg-card border-border" onClick={handleCardClick}>
-        <CardHeader>
-          <CardTitle className="text-foreground" style={{ color: uiColor }}>
-            ACTIVE QUESTS
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Tabs defaultValue="plans" className="w-full">
-            <TabsList className="grid w-full grid-cols-3 bg-secondary">
-              <TabsTrigger value="plans">Tasks</TabsTrigger>
-              <TabsTrigger value="dailies">Daily</TabsTrigger>
-              <TabsTrigger value="habits">Habits</TabsTrigger>
-            </TabsList>
-
-            <div className="mt-4 mb-2"></div>
-
-            <TabsContent value="plans">{renderTabContent("plans")}</TabsContent>
-            <TabsContent value="dailies">{renderTabContent("dailies")}</TabsContent>
-            <TabsContent value="habits">{renderTabContent("habits")}</TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
-
-      <Dialog open={!!editingQuest} onOpenChange={(open) => !open && setEditingQuest(null)}>
-        <DialogContent className="bg-card border-border" onOpenAutoFocus={(e) => e.preventDefault()}>
-          <DialogHeader>
-            <DialogTitle className="text-primary">EDIT QUEST</DialogTitle>
-          </DialogHeader>
-          {editingQuest && (
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="plan-name">Quest Name</Label>
-                <Input
-                  id="plan-name"
-                  value={editingQuest.title}
-                  onChange={(e) => setEditingQuest({ ...editingQuest, title: e.target.value })}
-                  className="bg-input"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-2">
-                  <Label htmlFor="skill">Area</Label>
-                  <Select
-                    value={editingQuest.skill || "none"}
-                    onValueChange={(value) => setEditingQuest({ ...editingQuest, skill: value === "none" ? "" : value })}
-                  >
-                    <SelectTrigger id="skill" className="bg-input">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">No area</SelectItem>
-                      {(availableAreas || []).map((skill: string) => (
-                        <SelectItem key={skill} value={skill}>
-                          {skill}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="rating">Priority</Label>
-                  <Select
-                    value={editingQuest.rating}
-                    onValueChange={(value) => setEditingQuest({ ...editingQuest, rating: value })}
-                  >
-                    <SelectTrigger id="rating" className="bg-input">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="fast">Fast</SelectItem>
-                      <SelectItem value="short">Short</SelectItem>
-                      <SelectItem value="deep">Deep</SelectItem>
-                      <SelectItem value="hard">Hard</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="xp-amount">Amount of XP</Label>
-                <Input
-                  id="xp-amount"
-                  type="number"
-                  value={editingQuest.xp}
-                  onChange={(e) => setEditingQuest({ ...editingQuest, xp: Number(e.target.value) })}
-                  className="bg-input"
-                />
-              </div>
-
-              {editingQuest.category === "dailies" && (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="frequency-count">Times</Label>
-                    <Select
-                      value={String(editingQuest.frequencyCount ?? editingQuest.frequency ?? 1)}
-                      onValueChange={(value) =>
-                        setEditingQuest({ ...editingQuest, frequencyCount: Number(value) })
-                      }
-                    >
-                      <SelectTrigger id="frequency-count" className="bg-input">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {[...Array(10)].map((_, i) => (
-                          <SelectItem key={i + 1} value={String(i + 1)}>
-                            {i + 1}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="frequency-period">Per days</Label>
-                    <Select
-                      value={String(editingQuest.frequencyPeriodDays ?? 1)}
-                      onValueChange={(value) =>
-                        setEditingQuest({ ...editingQuest, frequencyPeriodDays: Number(value) })
-                      }
-                    >
-                      <SelectTrigger id="frequency-period" className="bg-input">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {[...Array(14)].map((_, i) => (
-                          <SelectItem key={i + 1} value={String(i + 1)}>
-                            {i + 1}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="reset-time">Reset Time (UTC)</Label>
-                    <Select
-                      value={(editingQuest.resetTime || "00:00")}
-                      onValueChange={(value) => setEditingQuest({ ...editingQuest, resetTime: value })}
-                    >
-                      <SelectTrigger id="reset-time" className="bg-input">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {[...Array(24)].map((_, h) => {
-                          const label = `${String(h).padStart(2, "0")}:00`
-                          return (
-                            <SelectItem key={label} value={label}>
-                              {label}
-                            </SelectItem>
-                          )
-                        })}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              )}
-
-              {/* Subtasks Editing */}
-              <div className="space-y-3 pt-2 border-t border-border">
-                <Label>Subtasks</Label>
-
-                {(editingQuest.subtasks && editingQuest.subtasks.length > 0) ? (
-                  <div className="space-y-2">
-                    {editingQuest.subtasks.map((subtask, index) => {
-                      const isLast = index === (editingQuest.subtasks || []).length - 1
-                      return (
-                        <div key={subtask.id} className="flex items-center gap-2">
-                          <Input
-                            value={subtask.title}
-                            onChange={(e) => {
-                              const newSubtasks = [...(editingQuest.subtasks || [])]
-                              newSubtasks[index].title = e.target.value
-                              setEditingQuest({ ...editingQuest, subtasks: newSubtasks })
-                            }}
-                            placeholder="Enter subtask..."
-                            className="bg-input h-8 text-sm"
-                            autoFocus={isLast && subtask.title === "" && (editingQuest.subtasks || []).length > 1}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" && isLast) {
-                                e.preventDefault()
-                                setEditingQuest({
-                                  ...editingQuest,
-                                  subtasks: [
-                                    ...(editingQuest.subtasks || []),
-                                    { id: crypto.randomUUID(), title: "", completed: false }
-                                  ]
-                                })
-                              }
-                            }}
-                          />
-                          {isLast ? (
-                            <Button
-                              onClick={() => {
-                                setEditingQuest({
-                                  ...editingQuest,
-                                  subtasks: [
-                                    ...(editingQuest.subtasks || []),
-                                    { id: crypto.randomUUID(), title: "", completed: false }
-                                  ]
-                                })
-                              }}
-                              className="bg-primary hover:bg-primary/90 text-primary-foreground h-8 w-8 p-0 shrink-0"
-                              size="sm"
-                            >
-                              <Plus className="h-4 w-4" />
-                            </Button>
-                          ) : (
-                            <button
-                              onClick={() => {
-                                setEditingQuest({
-                                  ...editingQuest,
-                                  subtasks: editingQuest.subtasks?.filter(s => s.id !== subtask.id)
-                                })
-                              }}
-                              className="text-muted-foreground hover:text-destructive transition-colors h-8 w-8 flex items-center justify-center shrink-0"
-                            >
-                              <X className="h-4 w-4" />
-                            </button>
-                          )}
+            <Dialog open={!!editingQuest} onOpenChange={(open) => !open && setEditingQuest(null)}>
+                <DialogContent className="bg-card border-border" onOpenAutoFocus={(e) => e.preventDefault()}>
+                    <DialogHeader>
+                        <DialogTitle className="text-primary">EDIT QUEST</DialogTitle>
+                    </DialogHeader>
+                    {editingQuest && (
+                        <div className="space-y-4 py-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="plan-name">Quest Name</Label>
+                                <Input id="plan-name" value={editingQuest.title} onChange={(e) => setEditingQuest({ ...editingQuest, title: e.target.value })} className="bg-input" />
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div className="space-y-2">
+                                    <Label htmlFor="skill">Area</Label>
+                                    <Select value={editingQuest.skill || "none"} onValueChange={(value) => setEditingQuest({ ...editingQuest, skill: value === "none" ? "" : value })}>
+                                        <SelectTrigger id="skill" className="bg-input"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="none">No area</SelectItem>
+                                            {(availableAreas || []).map((skill: string) => (<SelectItem key={skill} value={skill}>{skill}</SelectItem>))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="rating">Priority</Label>
+                                    <Select value={editingQuest.rating} onValueChange={(value) => setEditingQuest({ ...editingQuest, rating: value })}>
+                                        <SelectTrigger id="rating" className="bg-input"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="fast">Fast</SelectItem>
+                                            <SelectItem value="short">Short</SelectItem>
+                                            <SelectItem value="deep">Deep</SelectItem>
+                                            <SelectItem value="hard">Hard</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="xp-amount">Amount of XP</Label>
+                                <Input id="xp-amount" type="number" value={editingQuest.xp} onChange={(e) => setEditingQuest({ ...editingQuest, xp: Number(e.target.value) })} className="bg-input" />
+                            </div>
+                            {editingQuest.category === "dailies" && (
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="frequency-count">Times</Label>
+                                        <Select value={String(editingQuest.frequencyCount ?? 1)} onValueChange={(value) => setEditingQuest({ ...editingQuest, frequencyCount: Number(value) })}>
+                                            <SelectTrigger id="frequency-count" className="bg-input"><SelectValue /></SelectTrigger>
+                                            <SelectContent>{[...Array(10)].map((_, i) => (<SelectItem key={i + 1} value={String(i + 1)}>{i + 1}</SelectItem>))}</SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="frequency-period">Per days</Label>
+                                        <Select value={String(editingQuest.frequencyPeriodDays ?? 1)} onValueChange={(value) => setEditingQuest({ ...editingQuest, frequencyPeriodDays: Number(value) })}>
+                                            <SelectTrigger id="frequency-period" className="bg-input"><SelectValue /></SelectTrigger>
+                                            <SelectContent>{[...Array(14)].map((_, i) => (<SelectItem key={i + 1} value={String(i + 1)}>{i + 1}</SelectItem>))}</SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="reset-time">Reset Time (UTC)</Label>
+                                        <Select value={(editingQuest.resetTime || "00:00")} onValueChange={(value) => setEditingQuest({ ...editingQuest, resetTime: value })}>
+                                            <SelectTrigger id="reset-time" className="bg-input"><SelectValue /></SelectTrigger>
+                                            <SelectContent>{[...Array(24)].map((_, h) => { const label = `${String(h).padStart(2, "0")}:00`; return (<SelectItem key={label} value={label}>{label}</SelectItem>) })}</SelectContent>
+                                        </Select>
+                                    </div>
+                                </div>
+                            )}
+                            <div className="space-y-3 pt-2 border-t border-border">
+                                <Label>Subtasks</Label>
+                                <div className="space-y-2">
+                                    {(editingQuest.subtasks || []).map((subtask, index) => (
+                                        <div key={subtask.id} className="flex items-center gap-2">
+                                            <Input
+                                                value={subtask.title}
+                                                onChange={(e) => {
+                                                    const updated = [...(editingQuest.subtasks || [])]
+                                                    updated[index].title = e.target.value
+                                                    setEditingQuest({ ...editingQuest, subtasks: updated })
+                                                }}
+                                                className="bg-input h-8 text-sm"
+                                            />
+                                            <Button size="sm" variant="ghost" onClick={() => {
+                                                const updated = (editingQuest.subtasks || []).filter((_, i) => i !== index)
+                                                setEditingQuest({ ...editingQuest, subtasks: updated })
+                                            }}><X className="h-3 w-3" /></Button>
+                                        </div>
+                                    ))}
+                                    <Button size="sm" variant="outline" className="w-full text-xs" onClick={() => {
+                                        const updated = [...(editingQuest.subtasks || []), { id: Date.now().toString(), title: "", completed: false }]
+                                        setEditingQuest({ ...editingQuest, subtasks: updated })
+                                    }}>+ Add Subtask</Button>
+                                </div>
+                            </div>
                         </div>
-                      )
-                    })}
-                  </div>
-                ) : (
-                  <Button
-                    onClick={() => {
-                      setEditingQuest({
-                        ...editingQuest,
-                        subtasks: [
-                          { id: crypto.randomUUID(), title: "", completed: false }
-                        ]
-                      })
-                    }}
-                    className="w-full h-8 bg-primary hover:bg-primary/90 text-primary-foreground"
-                    size="sm"
-                  >
-                    <Plus className="h-4 w-4 mr-2" /> Add Subtask
-                  </Button>
-                )}
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditingQuest(null)}>
-              Cancel
-            </Button>
-            <Button onClick={handleSaveQuest} className="bg-primary text-primary-foreground">
-              Save Changes
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
-  )
+                    )}
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setEditingQuest(null)}>Cancel</Button>
+                        <Button style={{ backgroundColor: uiColor }} className="text-white" onClick={handleSaveQuest}>Save Changes</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+        </div>
+    )
 }

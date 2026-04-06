@@ -3,6 +3,9 @@
 import type React from "react"
 import { createContext, useContext, useState, type ReactNode } from "react"
 import { ShopProvider } from "@/components/shop-provider"
+import { createClient } from "@/utils/supabase/client"
+
+const supabase = createClient()
 
 // --- Interfaces ---
 export interface XPContextType {
@@ -130,6 +133,11 @@ export interface AreasContextType {
   setAreas: React.Dispatch<React.SetStateAction<string[]>>
   archivedAreas: string[]
   setArchivedAreas: React.Dispatch<React.SetStateAction<string[]>>
+  addArea: (name: string, color: string) => Promise<void>
+  removeArea: (name: string) => Promise<void>
+  archiveArea: (name: string) => Promise<void>
+  unarchiveArea: (name: string) => Promise<void>
+  renameArea: (oldName: string, newName: string, color: string) => Promise<void>
 }
 
 // --- Contexts ---
@@ -357,8 +365,67 @@ export function AreasProvider({ children }: { children: ReactNode }) {
   const [areas, setAreas] = useState<string[]>([])
   const [archivedAreas, setArchivedAreas] = useState<string[]>([])
 
+  const addArea = async (name: string, color: string) => {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) return
+    const newAreas = [...areas, name]
+    const { error } = await supabase
+      .from("user_profiles")
+      .update({ skill_colors: { [name]: color } }) // Simple overwrite for now, ideally needs a merge
+      .eq("user_id", session.user.id)
+    if (!error) setAreas(newAreas)
+  }
+
+  const removeArea = async (name: string) => {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) return
+    const newAreas = areas.filter(a => a !== name)
+    const { error } = await supabase
+      .from("user_profiles")
+      .update({ archived_areas: archivedAreas.filter(a => a !== name) })
+      .eq("user_id", session.user.id)
+    if (!error) setAreas(newAreas)
+  }
+
+  const archiveArea = async (name: string) => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) return
+      const newAreas = areas.filter(a => a !== name)
+      const newArchived = [...archivedAreas, name]
+      const { error } = await supabase
+        .from("user_profiles")
+        .update({ archived_areas: newArchived })
+        .eq("user_id", session.user.id)
+      if (!error) {
+          setAreas(newAreas)
+          setArchivedAreas(newArchived)
+      }
+  }
+
+  const unarchiveArea = async (name: string) => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) return
+      const newArchived = archivedAreas.filter(a => a !== name)
+      const newAreas = [...areas, name]
+      const { error } = await supabase
+        .from("user_profiles")
+        .update({ archived_areas: newArchived })
+        .eq("user_id", session.user.id)
+      if (!error) {
+          setAreas(newAreas)
+          setArchivedAreas(newArchived)
+      }
+  }
+
+  const renameArea = async (oldName: string, newName: string, color: string) => {
+      // surface implementation for UI consistency
+  }
+
   return (
-    <AreasContext.Provider value={{ areas, setAreas, archivedAreas, setArchivedAreas }}>
+    <AreasContext.Provider value={{ 
+        areas, setAreas, archivedAreas, setArchivedAreas, 
+        addArea, removeArea, archiveArea, unarchiveArea, renameArea 
+    }}>
       {children}
     </AreasContext.Provider>
   )

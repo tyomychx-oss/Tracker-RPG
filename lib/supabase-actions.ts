@@ -5,13 +5,12 @@ const supabase = createClient()
 
 /**
  * Updates the entire user profile row.
- * Currently we store most data in a single JSONB-heavy row.
+ * Returns the updates upon success.
  */
 export async function updateProfile(updates: Partial<UserProfile>) {
   const { data: { session } } = await supabase.auth.getSession()
-  if (!session) return
+  if (!session) return null
 
-  // Standardize mapping from UI camelCase to DB snake_case for the main columns
   const dbPayload: any = { ...updates }
   if (updates.totalXP !== undefined) dbPayload.total_xp = updates.totalXP
   if (updates.currentLevel !== undefined) dbPayload.current_level = updates.currentLevel
@@ -20,7 +19,7 @@ export async function updateProfile(updates: Partial<UserProfile>) {
   if (updates.skillColors !== undefined) dbPayload.skill_colors = updates.skillColors
   if (updates.uiColor !== undefined) dbPayload.ui_color = updates.uiColor
   if (updates.taskSnapshots !== undefined) dbPayload.task_snapshots = updates.taskSnapshots
-  if (updates.archivedSkills !== undefined) dbPayload.archived_areas = updates.archivedSkills
+  if (updates.archivedAreas !== undefined) dbPayload.archived_areas = updates.archivedAreas
 
   const { error } = await supabase
     .from("user_profiles")
@@ -31,6 +30,8 @@ export async function updateProfile(updates: Partial<UserProfile>) {
     console.error("Failed to update profile:", error)
     throw error
   }
+  
+  return updates
 }
 
 /**
@@ -45,7 +46,7 @@ export async function updateQuests(quests: UserProfile["quests"]) {
  */
 export async function recordActivity(activity: UserProfile["activities"][number]) {
   const { data: { session } } = await supabase.auth.getSession()
-  if (!session) return
+  if (!session) return null
 
   const { data: profile } = await supabase
     .from("user_profiles")
@@ -61,7 +62,7 @@ export async function recordActivity(activity: UserProfile["activities"][number]
 
 /**
  * High-level helper for quest completion logic.
- * This encapsulates the multi-provider logic into a single DB call.
+ * Updates local state and returns the data for immediate UI sync.
  */
 export async function syncQuestCompletion({
   category,
@@ -87,7 +88,7 @@ export async function syncQuestCompletion({
   xpState: { totalXP: number, currentLevel: number, maxXP: number }
 }) {
   const { data: { session } } = await supabase.auth.getSession()
-  if (!session) return
+  if (!session) return null
 
   const { data: profile } = await supabase
     .from("user_profiles")
@@ -100,6 +101,8 @@ export async function syncQuestCompletion({
       skillXPs[skillName] = Math.max(0, (skillXPs[skillName] || 0) + xpChange)
   }
 
+  const newSparks = Math.max(0, (profile?.sparks || 0) + sparkChange)
+
   const payload: any = {
     quests: newQuestData,
     activities: newActivities,
@@ -108,7 +111,7 @@ export async function syncQuestCompletion({
     current_level: xpState.currentLevel,
     max_xp: xpState.maxXP,
     skill_xps: skillXPs,
-    sparks: Math.max(0, (profile?.sparks || 0) + sparkChange)
+    sparks: newSparks
   }
 
   const { error } = await supabase
@@ -117,4 +120,13 @@ export async function syncQuestCompletion({
     .eq("user_id", session.user.id)
 
   if (error) throw error
+
+  return {
+    quests: newQuestData,
+    activities: newActivities,
+    taskSnapshots: newSnapshots,
+    xpState,
+    skillXPs,
+    sparks: newSparks
+  }
 }

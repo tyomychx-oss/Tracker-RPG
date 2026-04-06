@@ -18,14 +18,14 @@ import { syncQuestCompletion, updateQuests, updateProfile } from "@/lib/supabase
 import { addXPToState, removeXPFromState } from "@/lib/rpg-logic"
 
 export function ActiveQuests() {
-    const { quests, taskSnapshots } = useQuests()
-    const { totalXP, currentLevel, maxXP } = useXP()
-    const { areaXPs } = useAreaXP()
+    const { quests, taskSnapshots, setQuests, setTaskSnapshots } = useQuests()
+    const { totalXP, currentLevel, maxXP, setXPState } = useXP()
+    const { areaXPs, setAreaXPs } = useAreaXP()
     const { areaColors } = useAreaColors()
     const { selectedAreas } = useAreaFilter()
-    const { activities } = useRecentActivity()
+    const { activities, setActivities } = useRecentActivity()
     const { uiColor } = useUIColor()
-    const { sparks } = useSparks()
+    const { sparks, setSparks } = useSparks()
     const { areas: availableAreas } = useAreas()
 
     const [showArchived, setShowArchived] = useState({
@@ -126,22 +126,27 @@ export function ActiveQuests() {
             }
         }
 
-        // SYNC EVERYTHING IN ONE SHOT
-        try {
-            await syncQuestCompletion({
-                category,
-                questId,
-                isCompleted: !isCompleted,
-                xpChange: isCompleted ? -xpAmount : xpAmount,
-                sparkChange,
-                skillName,
-                newQuestData: newQuests,
-                newActivities: newActivities.slice(0, 100),
-                newSnapshots,
-                xpState: newXpState
-            })
-        } catch (err) {
-            console.error("Toggle sync failed:", err)
+        const result = await syncQuestCompletion({
+            category,
+            questId,
+            isCompleted: !isCompleted,
+            xpChange: isCompleted ? -xpAmount : xpAmount,
+            sparkChange,
+            skillName,
+            newQuestData: newQuests,
+            newActivities: newActivities.slice(0, 100),
+            newSnapshots,
+            xpState: newXpState
+        })
+
+        if (result) {
+            // IMMEDIATE LOCAL SYNC
+            setQuests(result.quests)
+            setXPState(result.xpState)
+            setAreaXPs(result.skillXPs)
+            setActivities(result.activities as any)
+            setTaskSnapshots(result.taskSnapshots)
+            setSparks(result.sparks)
         }
     }
 
@@ -157,10 +162,15 @@ export function ActiveQuests() {
             ...activities
         ]
 
-        await updateProfile({
+        const result = await updateProfile({
             quests: newQuests,
             activities: newActivities.slice(0, 100)
         })
+
+        if (result) {
+            setQuests(newQuests)
+            setActivities(newActivities as any)
+        }
     }
 
     const handleUnarchiveQuest = async (category: "plans" | "dailies" | "habits", questId: number, xpAmount: number, skillName: string) => {
@@ -177,13 +187,19 @@ export function ActiveQuests() {
             newSkillXPs[skillName] = Math.max(0, (newSkillXPs[skillName] || 0) - xpAmount)
         }
 
-        await updateProfile({
+        const result = await updateProfile({
             quests: newQuests,
             totalXP: newXp.totalXP,
             currentLevel: newXp.currentLevel,
             maxXP: newXp.maxXP,
             skillXPs: newSkillXPs
         })
+
+        if (result) {
+            setQuests(newQuests)
+            setXPState(newXp)
+            setAreaXPs(newSkillXPs)
+        }
     }
 
     const handleDeleteQuest = async (category: "plans" | "dailies" | "habits", questId: number, questTitle: string) => {
@@ -195,10 +211,15 @@ export function ActiveQuests() {
             ...activities
         ]
 
-        await updateProfile({
+        const result = await updateProfile({
             quests: newQuests,
             activities: newActivities.slice(0, 100)
         })
+
+        if (result) {
+            setQuests(newQuests)
+            setActivities(newActivities as any)
+        }
     }
 
     const handleSaveQuest = async () => {
@@ -221,7 +242,8 @@ export function ActiveQuests() {
             }
         }
 
-        await updateQuests(newQuests)
+        const result = await updateQuests(newQuests)
+        if (result) setQuests(newQuests)
         setEditingQuest(null)
     }
 
@@ -233,7 +255,8 @@ export function ActiveQuests() {
                 s.id === subtaskId ? { ...s, completed: !s.completed } : s
             )
         }
-        await updateQuests(newQuests)
+        const result = await updateQuests(newQuests)
+        if (result) setQuests(newQuests)
     }
 
     const handlePinQuest = async (category: "plans" | "dailies" | "habits", questId: number, isPinned: boolean) => {
@@ -243,7 +266,8 @@ export function ActiveQuests() {
             newQuests[category][qIdx].pinned = !isPinned
             newQuests[category][qIdx].pinnedOrder = isPinned ? undefined : Date.now()
         }
-        await updateQuests(newQuests)
+        const result = await updateQuests(newQuests)
+        if (result) setQuests(newQuests)
     }
 
     const handleEditQuest = (quest: any, category: "plans" | "dailies" | "habits") => {
@@ -286,7 +310,8 @@ export function ActiveQuests() {
             if (qIdx !== -1) newQuests[category][qIdx].pinnedOrder = index
         })
 
-        await updateQuests(newQuests)
+        const result = await updateQuests(newQuests)
+        if (result) setQuests(newQuests)
         setDraggedQuest(null)
     }
 

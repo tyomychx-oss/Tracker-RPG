@@ -16,6 +16,12 @@ import {
   useRecentActivity,
   useNickname,
   useUIColor,
+  useXP,
+  useQuests,
+  useAreaXP,
+  useAreaColors,
+  useSparks,
+  useAreas,
   type UserProfile
 } from "@/components/providers"
 
@@ -26,23 +32,18 @@ export default function Page() {
   const [isMobile, setIsMobile] = useState(false)
   const [quickAddOpen, setQuickAddOpen] = useState(false)
 
+  const { setXPState } = useXP()
+  const { setQuests, setTaskSnapshots } = useQuests()
+  const { setAreaXPs } = useAreaXP()
+  const { setAreaColors } = useAreaColors()
+  const { setActivities } = useRecentActivity()
+  const { setUIColor } = useUIColor()
+  const { setNickname } = useNickname()
+  const { setSparks } = useSparks()
+  const { setAreas, setArchivedAreas } = useAreas()
+
   useEffect(() => {
     const checkAuth = async () => {
-      // First check if we already have a profile in localStorage
-      const storedProfile = localStorage.getItem("currentUserProfile")
-      if (storedProfile) {
-        try {
-          const profile = JSON.parse(storedProfile)
-          if (profile.nickname) {
-            // We have a valid cached profile, skip loading state
-            setIsCheckingAuth(false)
-            return
-          }
-        } catch (e) {
-          // Invalid cached data, continue with normal auth check
-        }
-      }
-
       const { createClient } = await import("@/utils/supabase/client")
       const supabase = createClient()
 
@@ -63,39 +64,41 @@ export default function Page() {
         const nicknameFromMetadata = session.user.user_metadata?.nickname
 
         if (nicknameFromMetadata) {
+          const defaultProfile = {
+            user_id: session.user.id,
+            nickname: nicknameFromMetadata,
+            total_xp: 0,
+            current_level: 1,
+            max_xp: 200,
+            skill_xps: {},
+            skill_colors: {},
+            quests: { plans: [], dailies: [], habits: [] },
+            activities: [],
+            ui_color: "#de6550",
+            task_snapshots: {},
+            sparks: 0,
+            archived_areas: []
+          }
+
           await supabase
             .from("user_profiles")
-            .upsert({
-              user_id: session.user.id,
-              nickname: nicknameFromMetadata,
-              total_xp: 0,
-              current_level: 1,
-              max_xp: 200,
-              skill_xps: {},
-              skill_colors: {},
-              quests: { plans: [], dailies: [], habits: [] },
-              activities: [],
-              ui_color: "#de6550",
-              task_snapshots: {},
-            }, {
+            .upsert(defaultProfile, {
               onConflict: "user_id"
             })
 
-          const newProfile: UserProfile = {
-            nickname: nicknameFromMetadata,
-            totalXP: 0,
-            currentLevel: 1,
-            maxXP: 200,
-            skillXPs: {},
-            skillColors: {},
-            quests: { plans: [], dailies: [], habits: [] },
-            activities: [],
-            uiColor: "#de6550",
-            taskSnapshots: {},
-            sparks: 0,
-          }
-
-          localStorage.setItem("currentUserProfile", JSON.stringify(newProfile))
+          // Populate providers with defaults
+          setNickname(nicknameFromMetadata)
+          setXPState({ totalXP: 0, currentLevel: 1, maxXP: 200 })
+          setAreaXPs({})
+          setAreaColors({})
+          setQuests({ plans: [], dailies: [], habits: [] })
+          setActivities([])
+          setUIColor("#de6550")
+          setTaskSnapshots({})
+          setSparks(0)
+          setAreas([])
+          setArchivedAreas([])
+          
           setIsCheckingAuth(false)
           return
         }
@@ -105,21 +108,28 @@ export default function Page() {
         return
       }
 
-      const userProfile: UserProfile = {
-        nickname: profile.nickname || "",
+      // POPULATE PROVIDERS FROM SUPABASE
+      console.log("[Initial Load] Populating state from Supabase for:", profile.nickname)
+      setNickname(profile.nickname || "")
+      setXPState({
         totalXP: profile.total_xp || 0,
         currentLevel: profile.current_level || 1,
         maxXP: profile.max_xp || 200,
-        skillXPs: profile.skill_xps || {},
-        skillColors: profile.skill_colors || {},
-        quests: profile.quests || { plans: [], dailies: [], habits: [] },
-        activities: profile.activities || [],
-        uiColor: profile.ui_color || "#de6550",
-        taskSnapshots: profile.task_snapshots || {},
-        sparks: profile.sparks || 0,
-      }
+      })
+      setAreaXPs(profile.skill_xps || {})
+      setAreaColors(profile.skill_colors || {})
+      setQuests(profile.quests || { plans: [], dailies: [], habits: [] })
+      setActivities(profile.activities || [])
+      setUIColor(profile.ui_color || "#de6550")
+      setTaskSnapshots(profile.task_snapshots || {})
+      setSparks(profile.sparks || 0)
+      
+      const skillColors = profile.skill_colors || {}
+      const archived = profile.archived_areas || []
+      const allAreaNames = Object.keys(skillColors)
+      setAreas(allAreaNames.filter(name => !archived.includes(name)))
+      setArchivedAreas(archived)
 
-      localStorage.setItem("currentUserProfile", JSON.stringify(userProfile))
       setIsCheckingAuth(false)
     }
 
@@ -170,6 +180,8 @@ export default function Page() {
         activities: [],
         ui_color: "#de6550",
         task_snapshots: {},
+        sparks: 0,
+        archived_areas: []
       }, {
         onConflict: "user_id"
       })
@@ -179,21 +191,19 @@ export default function Page() {
       return
     }
 
-    const newProfile: UserProfile = {
-      nickname: tempNickname.trim(),
-      totalXP: 0,
-      currentLevel: 1,
-      maxXP: 200,
-      skillXPs: {},
-      skillColors: {},
-      quests: { plans: [], dailies: [], habits: [] },
-      activities: [],
-      uiColor: "#de6550",
-      taskSnapshots: {},
-      sparks: 0,
-    }
+    // Populate providers for the newly created user
+    setNickname(tempNickname.trim())
+    setXPState({ totalXP: 0, currentLevel: 1, maxXP: 200 })
+    setAreaXPs({})
+    setAreaColors({})
+    setQuests({ plans: [], dailies: [], habits: [] })
+    setActivities([])
+    setUIColor("#de6550")
+    setTaskSnapshots({})
+    setSparks(0)
+    setAreas([])
+    setArchivedAreas([])
 
-    localStorage.setItem("currentUserProfile", JSON.stringify(newProfile))
     setShowOnboarding(false)
   }
 

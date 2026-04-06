@@ -28,7 +28,9 @@ export interface Transaction {
 
 interface ShopContextType {
     rewards: ShopReward[]
+    setRewards: React.Dispatch<React.SetStateAction<ShopReward[]>> // Added
     transactions: Transaction[]
+    setTransactions: React.Dispatch<React.SetStateAction<Transaction[]>> // Added
     isLoading: boolean
     addReward: (reward: Omit<ShopReward, "id" | "created_at">) => Promise<void>
     updateReward: (id: string, updates: Partial<ShopReward>) => Promise<void>
@@ -244,7 +246,9 @@ export function ShopProvider({ children }: { children: ReactNode }) {
     return (
         <ShopContext.Provider value={{
             rewards,
+            setRewards,
             transactions,
+            setTransactions,
             isLoading,
             addReward,
             updateReward,

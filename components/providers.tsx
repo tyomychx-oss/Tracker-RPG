@@ -10,6 +10,7 @@ export interface XPContextType {
   accumulatedXP: number
   currentLevel: number
   maxXP: number
+  setXPState: React.Dispatch<React.SetStateAction<{ totalXP: number; currentLevel: number; maxXP: number }>> // Added
   addXP: (amount: number) => void
   removeXP: (amount: number) => void
   resetXP: () => void
@@ -18,6 +19,7 @@ export interface XPContextType {
 
 export interface AreaXPContextType {
   areaXPs: Record<string, number>
+  setAreaXPs: React.Dispatch<React.SetStateAction<Record<string, number>>> // Added
   addAreaXP: (area: string, amount: number) => void
   removeAreaXP: (area: string, amount: number) => void
   renameAreaXPKey: (oldName: string, newName: string) => void
@@ -25,6 +27,7 @@ export interface AreaXPContextType {
 
 export interface AreaColorsContextType {
   areaColors: Record<string, string>
+  setAreaColors: React.Dispatch<React.SetStateAction<Record<string, string>>> // Added
   setAreaColor: (area: string, color: string) => void
   renameAreaColorKey: (oldName: string, newName: string) => void
 }
@@ -70,6 +73,7 @@ export interface QuestsContextType {
     dailies: Quest[]
     habits: Quest[]
   }
+  setQuests: React.Dispatch<React.SetStateAction<{ plans: Quest[]; dailies: Quest[]; habits: Quest[] }>>
   addQuest: (category: "plans" | "dailies" | "habits", quest: Quest) => void
   updateQuest: (category: "plans" | "dailies" | "habits", questId: number, updates: Partial<Quest>) => void
   deleteQuest: (category: "plans" | "dailies" | "habits", questId: number) => void
@@ -79,6 +83,7 @@ export interface QuestsContextType {
 
 export interface RecentActivityContextType {
   activities: Array<{ id: number; action: string; timestamp: number; xp?: number; sparks?: number; type?: "plans" | "dailies" | "habits" }>
+  setActivities: React.Dispatch<React.SetStateAction<Array<{ id: number; action: string; timestamp: number; xp?: number; sparks?: number; type?: "plans" | "dailies" | "habits" }>>> // Added
   addActivity: (action: string, xp?: number, type?: "plans" | "dailies" | "habits", sparks?: number) => void
   resetActivities: () => void
 }
@@ -95,6 +100,7 @@ export interface NicknameContextType {
 
 export interface SparksContextType {
   sparks: number
+  setSparks: React.Dispatch<React.SetStateAction<number>> // Added
   addSparks: (amount: number) => void
   removeSparks: (amount: number) => void
 }
@@ -128,10 +134,12 @@ export interface UserProfile {
 
 export interface AreasContextType {
   areas: string[]
+  setAreas: React.Dispatch<React.SetStateAction<string[]>>
   addArea: (areaName: string, color: string) => void
   removeArea: (areaName: string) => void
   hasAreas: boolean
   archivedAreas: string[]
+  setArchivedAreas: React.Dispatch<React.SetStateAction<string[]>>
   archiveArea: (areaName: string) => void
   unarchiveArea: (areaName: string) => void
   renameArea: (oldName: string, newName: string, newColor?: string) => void
@@ -411,6 +419,7 @@ export function XPProvider({ children }: { children: ReactNode }) {
         accumulatedXP,
         currentLevel: xpState.currentLevel,
         maxXP: xpState.maxXP,
+        setXPState, // Added
         addXP,
         removeXP,
         resetXP,
@@ -475,7 +484,7 @@ export function AreaXPProvider({ children }: { children: ReactNode }) {
     })
   }
 
-  return <AreaXPContext.Provider value={{ areaXPs, addAreaXP, removeAreaXP, renameAreaXPKey }}>{children}</AreaXPContext.Provider>
+  return <AreaXPContext.Provider value={{ areaXPs, setAreaXPs, addAreaXP, removeAreaXP, renameAreaXPKey }}>{children}</AreaXPContext.Provider>
 }
 
 export function AreaColorsProvider({ children }: { children: ReactNode }) {
@@ -516,7 +525,7 @@ export function AreaColorsProvider({ children }: { children: ReactNode }) {
     })
   }
 
-  return <AreaColorsContext.Provider value={{ areaColors, setAreaColor, renameAreaColorKey }}>{children}</AreaColorsContext.Provider>
+  return <AreaColorsContext.Provider value={{ areaColors, setAreaColors, setAreaColor, renameAreaColorKey }}>{children}</AreaColorsContext.Provider>
 }
 
 export function AreaFilterProvider({ children }: { children: ReactNode }) {
@@ -599,7 +608,7 @@ export function QuestsProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <QuestsContext.Provider value={{ quests, taskSnapshots, setTaskSnapshots, addQuest, updateQuest, deleteQuest, deleteQuestsBySkill, resetQuests }}>{children}</QuestsContext.Provider>
+    <QuestsContext.Provider value={{ quests, taskSnapshots, setTaskSnapshots, setQuests, addQuest, updateQuest, deleteQuest, deleteQuestsBySkill, resetQuests }}>{children}</QuestsContext.Provider>
   )
 }
 
@@ -637,7 +646,7 @@ export function RecentActivityProvider({ children }: { children: ReactNode }) {
     setActivities([])
   }
 
-  return <RecentActivityContext.Provider value={{ activities, addActivity, resetActivities }}>{children}</RecentActivityContext.Provider>
+  return <RecentActivityContext.Provider value={{ activities, setActivities, addActivity, resetActivities }}>{children}</RecentActivityContext.Provider>
 }
 
 export function UIColorProvider({ children }: { children: ReactNode }) {
@@ -700,7 +709,7 @@ export function SparksProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <SparksContext.Provider value={{ sparks, addSparks, removeSparks }}>
+    <SparksContext.Provider value={{ sparks, setSparks, addSparks, removeSparks }}>
       <ShopProvider>
         {children}
       </ShopProvider>
@@ -866,7 +875,18 @@ export function AreasProvider({ children }: { children: ReactNode }) {
   const hasAreas = areas.length > 0
   return (
     <AreasContext.Provider
-      value={{ areas, addArea, removeArea, hasAreas, archivedAreas, archiveArea, unarchiveArea, renameArea }}
+      value={{
+        areas,
+        setAreas,
+        addArea,
+        removeArea,
+        hasAreas,
+        archivedAreas,
+        setArchivedAreas,
+        archiveArea,
+        unarchiveArea,
+        renameArea,
+      }}
     >
       {children}
     </AreasContext.Provider>

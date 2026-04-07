@@ -364,57 +364,94 @@ export function NicknameProvider({ children }: { children: ReactNode }) {
 export function AreasProvider({ children }: { children: ReactNode }) {
   const [areas, setAreas] = useState<string[]>([])
   const [archivedAreas, setArchivedAreas] = useState<string[]>([])
+  const { areaColors, setAreaColors } = useAreaColors()
+  const { areaXPs, setAreaXPs } = useAreaXP()
 
   const addArea = async (name: string, color: string) => {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
-    const newAreas = [...areas, name]
+
+    // Optimistic UI updates
+    setAreas(prev => prev.includes(name) ? prev : [...prev, name])
+    setAreaColors(prev => ({ ...prev, [name]: color }))
+    setAreaXPs(prev => ({ ...prev, [name]: prev[name] || 0 }))
+
+    // Database update - MERGE instead of overwrite
     const { error } = await supabase
       .from("user_profiles")
-      .update({ skill_colors: { [name]: color } }) // Simple overwrite for now, ideally needs a merge
+      .update({ 
+        skill_colors: { ...areaColors, [name]: color } 
+      })
       .eq("user_id", session.user.id)
-    if (!error) setAreas(newAreas)
+    
+    if (error) console.error("Failed to add area:", error)
   }
 
   const removeArea = async (name: string) => {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
-    const newAreas = areas.filter(a => a !== name)
+
+    // Optimistic UI updates
+    setAreas(prev => prev.filter(a => a !== name))
+    setArchivedAreas(prev => prev.filter(a => a !== name))
+    setAreaColors(prev => {
+      const { [name]: _, ...rest } = prev
+      return rest
+    })
+    setAreaXPs(prev => {
+      const { [name]: _, ...rest } = prev
+      return rest
+    })
+
+    const { [name]: _, ...remainingColors } = areaColors
+    const { [name]: __, ...remainingXPs } = areaXPs
+
     const { error } = await supabase
       .from("user_profiles")
-      .update({ archived_areas: archivedAreas.filter(a => a !== name) })
+      .update({ 
+        skill_colors: remainingColors,
+        skill_xps: remainingXPs,
+        archived_areas: archivedAreas.filter(a => a !== name)
+      })
       .eq("user_id", session.user.id)
-    if (!error) setAreas(newAreas)
+    
+    if (error) console.error("Failed to remove area:", error)
   }
 
   const archiveArea = async (name: string) => {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) return
-      const newAreas = areas.filter(a => a !== name)
-      const newArchived = [...archivedAreas, name]
+
+      const updatedArchived = archivedAreas.includes(name) ? archivedAreas : [...archivedAreas, name]
+      
+      // Optimistic UI updates
+      setAreas(prev => prev.filter(a => a !== name))
+      setArchivedAreas(updatedArchived)
+
       const { error } = await supabase
         .from("user_profiles")
-        .update({ archived_areas: newArchived })
+        .update({ archived_areas: updatedArchived })
         .eq("user_id", session.user.id)
-      if (!error) {
-          setAreas(newAreas)
-          setArchivedAreas(newArchived)
-      }
+      
+      if (error) console.error("Failed to archive area:", error)
   }
 
   const unarchiveArea = async (name: string) => {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) return
-      const newArchived = archivedAreas.filter(a => a !== name)
-      const newAreas = [...areas, name]
+
+      const updatedArchived = archivedAreas.filter(a => a !== name)
+      
+      // Optimistic UI updates
+      setAreas(prev => prev.includes(name) ? prev : [...prev, name])
+      setArchivedAreas(updatedArchived)
+
       const { error } = await supabase
         .from("user_profiles")
-        .update({ archived_areas: newArchived })
+        .update({ archived_areas: updatedArchived })
         .eq("user_id", session.user.id)
-      if (!error) {
-          setAreas(newAreas)
-          setArchivedAreas(newArchived)
-      }
+      
+      if (error) console.error("Failed to unarchive area:", error)
   }
 
   const renameArea = async (oldName: string, newName: string, color: string) => {

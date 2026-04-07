@@ -122,12 +122,19 @@ export function SyncManager({ children }: SyncManagerProps) {
             if (newData.quests) setQuests(newData.quests)
             if (newData.task_snapshots) setTaskSnapshots(newData.task_snapshots)
             if (newData.skill_xps) setAreaXPs(newData.skill_xps)
-            if (newData.skill_colors) {
-              setAreaColors(newData.skill_colors)
-              const archived = newData.archived_areas || []
-              const allAreaNames = Object.keys(newData.skill_colors)
-              setAreas(allAreaNames.filter(n => !archived.includes(n)))
-              setArchivedAreas(archived)
+            if (newData.skill_colors || newData.archived_areas !== undefined) {
+              const updatedColors = newData.skill_colors || {}
+              const updatedArchived = newData.archived_areas || []
+              
+              if (newData.skill_colors) setAreaColors(updatedColors)
+              if (newData.archived_areas !== undefined) setArchivedAreas(updatedArchived)
+              
+              // Derive active areas from the full skill_colors keys minus archived ones
+              // Note: This works best when Supabase returns the full row (default)
+              if (newData.skill_colors) {
+                const allNames = Object.keys(updatedColors)
+                setAreas(allNames.filter(n => !updatedArchived.includes(n)))
+              }
             }
             if (newData.activities) setActivities(newData.activities)
             if (newData.ui_color) setUIColor(newData.ui_color)

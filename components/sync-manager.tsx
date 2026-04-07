@@ -34,6 +34,7 @@ export function SyncManager({ children }: SyncManagerProps) {
   React.useEffect(() => {
     lastUpdateRef.current = lastUpdated
   }, [lastUpdated])
+
   const { setAreaXPs } = useAreaXP()
   const { setAreaColors } = useAreaColors()
   const { setActivities } = useRecentActivity()
@@ -99,7 +100,10 @@ export function SyncManager({ children }: SyncManagerProps) {
         
         const archived = profile.archived_areas || []
         const allAreaNames = Object.keys(profile.skill_colors || {})
-        setAreas(allAreaNames.filter(name => !archived.includes(name)))
+        const activeAreas = allAreaNames.filter(name => !archived.includes(name))
+        console.log("DB FETCHED AREAS (Init):", activeAreas)
+        
+        setAreas(activeAreas)
         setArchivedAreas(archived)
 
         if (rewardsRes.data) setRewards(rewardsRes.data)
@@ -117,13 +121,7 @@ export function SyncManager({ children }: SyncManagerProps) {
 
   // 2. REALTIME SUBSCRIPTIONS
   useEffect(() => {
-    if (!isDataReady || !nickname || !userId) {
-      if (isDataReady && !nickname) {
-         // Probably newcomer - wait for onboarding
-         setRealtimeStatus("connected")
-      }
-      return
-    }
+    if (!isDataReady || !nickname || !userId) return
 
     const channel = supabase
       .channel(`global-sync-${userId}`)
@@ -143,6 +141,7 @@ export function SyncManager({ children }: SyncManagerProps) {
             console.log("[Sync] Skipping Realtime update (Too recent after local action)")
             return
           }
+
           if (newData.total_xp !== undefined) {
             setXPState({
               totalXP: newData.total_xp,
@@ -153,13 +152,24 @@ export function SyncManager({ children }: SyncManagerProps) {
           if (newData.quests) setQuests(newData.quests)
           if (newData.task_snapshots) setTaskSnapshots(newData.task_snapshots)
           if (newData.skill_xps) setAreaXPs(newData.skill_xps)
-          if (newData.skill_colors) {
-            setAreaColors(newData.skill_colors)
-            const archived = newData.archived_areas || []
-            const allAreaNames = Object.keys(newData.skill_colors)
-            setAreas(allAreaNames.filter(n => !archived.includes(n)))
-            setArchivedAreas(archived)
+          
+          if (newData.skill_colors || newData.archived_areas !== undefined) {
+            // Robust derivation using full row payload (Supabase Realtime default)
+            const updatedColors = newData.skill_colors || {}
+            const updatedArchived = newData.archived_areas || []
+            
+            if (newData.skill_colors) setAreaColors(updatedColors)
+            if (newData.archived_areas !== undefined) setArchivedAreas(updatedArchived)
+            
+            const allNames = Object.keys(updatedColors)
+            const activeAreas = allNames.filter(n => !updatedArchived.includes(n))
+            console.log("DB FETCHED AREAS (Realtime):", activeAreas)
+            
+            if (newData.skill_colors) {
+              setAreas(activeAreas)
+            }
           }
+
           if (newData.activities) setActivities(newData.activities)
           if (newData.ui_color) setUIColor(newData.ui_color)
           if (newData.sparks !== undefined) setSparks(newData.sparks)

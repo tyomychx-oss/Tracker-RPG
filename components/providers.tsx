@@ -393,57 +393,117 @@ export function NicknameProvider({ children }: { children: ReactNode }) {
 export function AreasProvider({ children }: { children: ReactNode }) {
   const [areas, setAreas] = useState<string[]>([])
   const [archivedAreas, setArchivedAreas] = useState<string[]>([])
+  const { areaColors, setAreaColors } = useAreaColors()
+  const { areaXPs, setAreaXPs } = useAreaXP()
 
   const addArea = async (name: string, color: string) => {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
-    const newAreas = [...areas, name]
+
+    // 1. Optimistic UI update
+    setAreas(prev => prev.includes(name) ? prev : [...prev, name])
+    setAreaColors(prev => ({ ...prev, [name]: color }))
+
+    // 2. FETCH CURRENT DATA FROM DB (Critical to avoid overwriting other areas)
+    const { data: profile } = await supabase
+      .from("user_profiles")
+      .select("skill_colors")
+      .eq("user_id", session.user.id)
+      .single()
+    
+    const currentColors = profile?.skill_colors || {}
+    const updatedColors = { ...currentColors, [name]: color }
+
+    // 3. Database update - Now guaranteed to be a merge
     const { error } = await supabase
       .from("user_profiles")
-      .update({ skill_colors: { [name]: color } }) // Simple overwrite for now, ideally needs a merge
+      .update({ skill_colors: updatedColors })
       .eq("user_id", session.user.id)
-    if (!error) setAreas(newAreas)
+    
+    if (error) console.error("Failed to add area:", error)
   }
 
   const removeArea = async (name: string) => {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
-    const newAreas = areas.filter(a => a !== name)
+
+    // 1. Optimistic UI update
+    setAreas(prev => prev.filter(a => a !== name))
+    setArchivedAreas(prev => prev.filter(a => a !== name))
+
+    // 2. FETCH CURRENT DATA FROM DB
+    const { data: profile } = await supabase
+      .from("user_profiles")
+      .select("skill_colors, skill_xps, archived_areas")
+      .eq("user_id", session.user.id)
+      .single()
+    
+    if (!profile) return
+
+    const { [name]: _, ...remainingColors } = profile.skill_colors || {}
+    const { [name]: __, ...remainingXPs } = profile.skill_xps || {}
+    const updatedArchived = (profile.archived_areas || []).filter((a: string) => a !== name)
+
     const { error } = await supabase
       .from("user_profiles")
-      .update({ archived_areas: archivedAreas.filter(a => a !== name) })
+      .update({ 
+        skill_colors: remainingColors,
+        skill_xps: remainingXPs,
+        archived_areas: updatedArchived
+      })
       .eq("user_id", session.user.id)
-    if (!error) setAreas(newAreas)
+    
+    if (error) console.error("Failed to remove area:", error)
   }
 
   const archiveArea = async (name: string) => {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) return
-      const newAreas = areas.filter(a => a !== name)
-      const newArchived = [...archivedAreas, name]
+
+      setAreas(prev => prev.filter(a => a !== name))
+      setArchivedAreas(prev => prev.includes(name) ? prev : [...prev, name])
+
+      // 2. FETCH CURRENT DATA FROM DB
+      const { data: profile } = await supabase
+        .from("user_profiles")
+        .select("archived_areas")
+        .eq("user_id", session.user.id)
+        .single()
+      
+      const currentArchived = profile?.archived_areas || []
+      const updatedArchived = currentArchived.includes(name) ? currentArchived : [...currentArchived, name]
+
       const { error } = await supabase
         .from("user_profiles")
-        .update({ archived_areas: newArchived })
+        .update({ archived_areas: updatedArchived })
         .eq("user_id", session.user.id)
-      if (!error) {
-          setAreas(newAreas)
-          setArchivedAreas(newArchived)
-      }
+      
+      if (error) console.error("Failed to archive area:", error)
   }
 
   const unarchiveArea = async (name: string) => {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) return
-      const newArchived = archivedAreas.filter(a => a !== name)
-      const newAreas = [...areas, name]
+
+      setAreas(prev => prev.includes(name) ? prev : [...prev, name])
+      setArchivedAreas(prev => prev.filter(a => a !== name))
+
+      // 2. FETCH CURRENT DATA FROM DB
+      const { data: profile } = await supabase
+        .from("user_profiles")
+        .select("archived_areas")
+        .eq("user_id", session.user.id)
+        .single()
+      
+      const currentArchived = profile?.archived_areas || []
+      const updatedArchived = currentArchived.filter((a: string) => a !== name)
+
       const { error } = await supabase
         .from("user_profiles")
-        .update({ archived_areas: newArchived })
+        .update({ archived_areas: updatedArchived })
         .eq("user_id", session.user.id)
-      if (!error) {
-          setAreas(newAreas)
-          setArchivedAreas(newArchived)
-      }
+      
+      if (error) console.error("Failed to unarchive area:", error)
   }
 
   const renameArea = async (oldName: string, newName: string, color: string) => {

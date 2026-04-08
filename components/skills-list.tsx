@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
+import { Pencil } from "lucide-react"
 import { useAreaColors, useUIColor, useAreaXP, useAreas, useAreaFilter } from "@/components/providers"
 import { updateProfile } from "@/lib/supabase-actions"
 
@@ -98,9 +99,9 @@ export function SkillsList() {
                                             <span className="font-semibold text-foreground group-hover:scale-105 transition-transform origin-left">{skill.name}</span>
                                             <button
                                                 onClick={(e) => { e.stopPropagation(); handleEdit(skill.name) }}
-                                                className="opacity-0 group-hover:opacity-100 text-[10px] text-muted-foreground hover:text-foreground underline"
+                                                className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground transition-opacity"
                                             >
-                                                edit
+                                                <Pencil className="w-4 h-4" />
                                             </button>
                                         </div>
                                         <div className="flex items-center gap-2">

@@ -128,7 +128,7 @@ export function ShopProvider({ children }: { children: ReactNode }) {
 
         // Optimistic update
         const previousRewards = [...rewards]
-        setRewards([newReward, ...rewards])
+        setRewards(prev => [newReward, ...prev])
 
         try {
             const { data, error } = await supabase

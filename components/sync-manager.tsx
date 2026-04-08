@@ -32,7 +32,7 @@ export function SyncManager({ children }: SyncManagerProps) {
   const { setNickname, nickname } = useNickname()
   const { setSparks } = useSparks()
   const { setAreas, setArchivedAreas } = useAreas()
-  const { setRewards, setTransactions } = useShop()
+  const { setRewards, setTransactions, setIsLoading: setShopLoading } = useShop()
 
   const supabase = createClient()
 
@@ -80,6 +80,7 @@ export function SyncManager({ children }: SyncManagerProps) {
 
         if (rewardsRes.data) setRewards(rewardsRes.data)
         if (transactionsRes.data) setTransactions(transactionsRes.data)
+        setShopLoading(false)
 
         setIsDataReady(true)
       } catch (err: any) {

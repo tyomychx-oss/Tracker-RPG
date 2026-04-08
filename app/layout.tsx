@@ -20,6 +20,7 @@ export const metadata: Metadata = {
 
 import { Providers } from "@/app/providers"
 import { DashboardLayout } from "@/components/dashboard-layout"
+import { SyncManager } from "@/components/sync-manager"
 
 export default function RootLayout({
   children,
@@ -30,11 +31,13 @@ export default function RootLayout({
     <html lang="en" className="dark" suppressHydrationWarning>
       <body className={`font-sans antialiased`} suppressHydrationWarning>
         <Providers>
-          <Suspense fallback={null}>
-            <DashboardLayout>
-              {children}
-            </DashboardLayout>
-          </Suspense>
+          <SyncManager>
+            <Suspense fallback={null}>
+              <DashboardLayout>
+                {children}
+              </DashboardLayout>
+            </Suspense>
+          </SyncManager>
         </Providers>
         <Analytics />
       </body>

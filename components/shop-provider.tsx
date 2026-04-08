@@ -35,6 +35,9 @@ interface ShopContextType {
     setIsLoading: React.Dispatch<React.SetStateAction<boolean>>
     buyReward: (reward: ShopReward) => Promise<boolean>
     spinWheel: () => Promise<ShopReward | null>
+    addReward: (reward: Omit<ShopReward, "id">) => Promise<void>
+    updateReward: (id: string, reward: Partial<ShopReward>) => Promise<void>
+    deleteReward: (id: string) => Promise<void>
 }
 
 const ShopContext = createContext<ShopContextType | undefined>(undefined)
@@ -116,6 +119,78 @@ export function ShopProvider({ children }: { children: ReactNode }) {
         return winner
     }
 
+    const addReward = async (rewardData: Omit<ShopReward, "id">) => {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session) return
+
+        const tempId = crypto.randomUUID()
+        const newReward: ShopReward = { ...rewardData, id: tempId }
+
+        // Optimistic update
+        const previousRewards = [...rewards]
+        setRewards([newReward, ...rewards])
+
+        try {
+            const { data, error } = await supabase
+                .from("shop_rewards")
+                .insert({ ...rewardData, user_id: session.user.id })
+                .select()
+                .single()
+
+            if (error) throw error
+            
+            // Replace temp item with real data from DB
+            setRewards(prev => prev.map(r => r.id === tempId ? data : r))
+            await recordTransaction(rewardData.title, 0, "item_created")
+        } catch (error) {
+            setRewards(previousRewards)
+            throw error
+        }
+    }
+
+    const updateReward = async (id: string, rewardData: Partial<ShopReward>) => {
+        const previousRewards = [...rewards]
+        
+        // Optimistic update
+        setRewards(prev => prev.map(r => r.id === id ? { ...r, ...rewardData } : r))
+
+        try {
+            const { error } = await supabase
+                .from("shop_rewards")
+                .update(rewardData)
+                .eq("id", id)
+
+            if (error) throw error
+            await recordTransaction(rewardData.title || "Reward", 0, "item_updated")
+        } catch (error) {
+            setRewards(previousRewards)
+            throw error
+        }
+    }
+
+    const deleteReward = async (id: string) => {
+        const previousRewards = [...rewards]
+        const rewardToDelete = rewards.find(r => r.id === id)
+        
+        // Optimistic update
+        setRewards(prev => prev.filter(r => r.id !== id))
+
+        try {
+            const { error } = await supabase
+                .from("shop_rewards")
+                .delete()
+                .eq("id", id)
+
+            if (error) throw error
+            if (rewardToDelete) {
+                await recordTransaction(rewardToDelete.title, 0, "item_deleted")
+            }
+        } catch (error) {
+            setRewards(previousRewards)
+            throw error
+        }
+    }
+
     return (
         <ShopContext.Provider value={{
             rewards,
@@ -125,7 +200,10 @@ export function ShopProvider({ children }: { children: ReactNode }) {
             isLoading,
             setIsLoading,
             buyReward,
-            spinWheel
+            spinWheel,
+            addReward,
+            updateReward,
+            deleteReward
         }}>
             {children}
         </ShopContext.Provider>

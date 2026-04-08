@@ -14,6 +14,7 @@ import {
     NicknameProvider,
     SparksProvider,
 } from "@/components/providers"
+import { ShopProvider } from "@/components/shop-provider"
 
 export function Providers({ children }: { children: ReactNode }) {
     // Suppress hydration warnings caused by browser extensions (e.g., Avast)
@@ -49,7 +50,9 @@ export function Providers({ children }: { children: ReactNode }) {
                                     <UIColorProvider>
                                         <NicknameProvider>
                                             <SparksProvider>
-                                                {children}
+                                                <ShopProvider>
+                                                    {children}
+                                                </ShopProvider>
                                             </SparksProvider>
                                         </NicknameProvider>
                                     </UIColorProvider>

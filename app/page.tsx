@@ -10,7 +10,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Award, Check, X, Trash2, Plus, Archive } from "lucide-react"
-import { SyncManager } from "@/components/sync-manager"
 
 // Import hooks
 import {
@@ -101,7 +100,7 @@ export default function Page() {
   }
 
   return (
-    <SyncManager>
+    <>
       {showOnboarding ? (
         <OnboardingDialog
           nickname={tempNickname}
@@ -138,7 +137,7 @@ export default function Page() {
           )}
         </>
       )}
-    </SyncManager>
+    </>
   )
 }
 

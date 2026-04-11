@@ -42,7 +42,7 @@ export function SyncManager({ children }: SyncManagerProps) {
       try {
         const { data: { session } } = await supabase.auth.getSession()
         if (!session) {
-          window.location.href = "/auth/sign-in"
+          setIsDataReady(true)
           return
         }
 
@@ -100,7 +100,10 @@ export function SyncManager({ children }: SyncManagerProps) {
 
     const setup = async () => {
       const { data: { session } } = await supabase.auth.getSession()
-      if (!session) return
+      if (!session) {
+        setIsDataReady(true) // Ensure we're ready even if no session
+        return
+      }
       userId = session.user.id
 
       const channel = supabase

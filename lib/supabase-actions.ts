@@ -52,7 +52,9 @@ export async function recordActivity(activity: UserProfile["activities"][number]
     .from("user_profiles")
     .select("activities")
     .eq("user_id", session.user.id)
-    .single()
+    .maybeSingle()
+
+  if (!profile) return null
 
   const currentActivities = profile?.activities || []
   const updatedActivities = [activity, ...currentActivities.slice(0, 999)]
@@ -94,7 +96,7 @@ export async function syncQuestCompletion({
     .from("user_profiles")
     .select("skill_xps, sparks")
     .eq("user_id", session.user.id)
-    .single()
+    .maybeSingle()
 
   const skillXPs = profile?.skill_xps || {}
   if (skillName && skillName !== "none") {
@@ -165,7 +167,7 @@ export async function resetAllUserProgress() {
     .from("user_profiles")
     .select("quests")
     .eq("user_id", userId)
-    .single()
+    .maybeSingle()
 
   if (profile?.quests) {
     const resetQuests = {
@@ -196,4 +198,32 @@ export async function resetAllUserProgress() {
   } catch (e) {}
 
   return true
+}
+
+/**
+ * Handles spark deductions with database-level validation.
+ */
+export async function processCommerceAction(cost: number) {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) throw new Error("Unauthorized")
+
+  const { data: profile, error: fetchError } = await supabase
+    .from("user_profiles")
+    .select("sparks, activities")
+    .eq("user_id", session.user.id)
+    .maybeSingle()
+
+  if (fetchError) throw new Error("Could not verify balance")
+  if (!profile) throw new Error("User profile not found. Please complete onboarding first.")
+  if (profile.sparks < cost) throw new Error("Insufficient sparks")
+
+  const newSparks = profile.sparks - cost
+  const { error: updateError } = await supabase
+    .from("user_profiles")
+    .update({ sparks: newSparks })
+    .eq("user_id", session.user.id)
+
+  if (updateError) throw updateError
+
+  return { sparks: newSparks, activities: profile.activities }
 }

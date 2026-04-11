@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useEffect, useState, ReactNode } from "react"
+import React, { useEffect, useState, ReactNode, useRef } from "react"
 import { createClient } from "@/utils/supabase/client"
 import {
   useXP,
@@ -24,14 +24,14 @@ export function SyncManager({ children }: SyncManagerProps) {
   const [isDataReady, setIsDataReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [realtimeStatus, setRealtimeStatus] = useState<"connecting" | "connected" | "disconnected">("connecting")
-  const [userId, setUserId] = useState<string | null>(null)
+  const [userIdState, setUserIdState] = useState<string | null>(null)
 
   const { setXPState } = useXP()
   const { setQuests, setTaskSnapshots, lastUpdated } = useQuests()
-  const lastUpdateRef = React.useRef(lastUpdated)
+  const lastUpdateRef = useRef(lastUpdated)
   
   // Keep ref in sync
-  React.useEffect(() => {
+  useEffect(() => {
     lastUpdateRef.current = lastUpdated
   }, [lastUpdated])
 
@@ -59,20 +59,21 @@ export function SyncManager({ children }: SyncManagerProps) {
         }
 
         if (!session) {
-          console.warn("[Sync] No session found, redirecting...")
-          window.location.href = "/auth/sign-in"
+          console.log("[Sync] No session found, entering passive mode.")
+          setIsDataReady(true)
           return
         }
 
         const currentUserId = session.user.id
-        setUserId(currentUserId)
+        setUserIdState(currentUserId)
         console.log("[Sync] Authenticated as:", currentUserId)
 
         // Parallel fetch for speed with CACHE BYPASS
         const [profileRes, rewardsRes, transactionsRes] = await Promise.all([
-          supabase.from("user_profiles").select("*", { count: "exact" }).eq("user_id", currentUserId).single(),
-          supabase.from("shop_rewards").select("*", { count: "exact" }).eq("user_id", currentUserId).order("created_at", { ascending: false }),
-          supabase.from("transactions").select("*", { count: "exact" }).eq("user_id", currentUserId).order("created_at", { ascending: false }).limit(50)
+          // FIX: maybeSingle() to handle missing profiles gracefully
+          supabase.from("user_profiles").select("*").eq("user_id", currentUserId).maybeSingle(),
+          supabase.from("shop_rewards").select("*").eq("user_id", currentUserId).order("created_at", { ascending: false }),
+          supabase.from("transactions").select("*").eq("user_id", currentUserId).order("created_at", { ascending: false }).limit(50)
         ])
 
         if (profileRes.error) {
@@ -81,6 +82,13 @@ export function SyncManager({ children }: SyncManagerProps) {
         }
         
         const profile = profileRes.data
+        
+        if (!profile) {
+          console.warn("[Sync] User profile not found (pending onboarding).")
+          setIsDataReady(true)
+          return
+        }
+
         console.log("[Sync] Data fetched successfully:", { profile: !!profile, rewards: rewardsRes.data?.length, txs: transactionsRes.data?.length })
 
         // Populate Contexts
@@ -101,7 +109,6 @@ export function SyncManager({ children }: SyncManagerProps) {
         const archived = profile.archived_areas || []
         const allAreaNames = Object.keys(profile.skill_colors || {})
         const activeAreas = allAreaNames.filter(name => !archived.includes(name))
-        console.log("DB FETCHED AREAS (Init):", activeAreas)
         
         setAreas(activeAreas)
         setArchivedAreas(archived)
@@ -122,21 +129,21 @@ export function SyncManager({ children }: SyncManagerProps) {
 
   // 2. REALTIME SUBSCRIPTIONS
   useEffect(() => {
-    if (!isDataReady || !nickname || !userId) return
+    // Only subscribe if we have data AND a userId
+    if (!isDataReady || !userIdState) return
 
     const channel = supabase
-      .channel(`global-sync-${userId}`)
+      .channel(`global-sync-${userIdState}`)
       // Listen to User Profile changes
       .on(
         "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "user_profiles", filter: `user_id=eq.${userId}` },
+        { event: "UPDATE", schema: "public", table: "user_profiles", filter: `user_id=eq.${userIdState}` },
         (payload) => {
           const newData = payload.new as any
           console.log("[Sync] Profile update received via Realtime")
 
           // PROTECT AGAINST REVERTS:
           // If we recently performed a local update, ignore Realtime for a short window
-          // or if the incoming data is potentially older/stale.
           const now = Date.now()
           if (now - lastUpdateRef.current < 3000) {
             console.log("[Sync] Skipping Realtime update (Too recent after local action)")
@@ -155,7 +162,6 @@ export function SyncManager({ children }: SyncManagerProps) {
           if (newData.skill_xps) setAreaXPs(newData.skill_xps)
           
           if (newData.skill_colors || newData.archived_areas !== undefined) {
-            // Robust derivation using full row payload (Supabase Realtime default)
             const updatedColors = newData.skill_colors || {}
             const updatedArchived = newData.archived_areas || []
             
@@ -164,7 +170,6 @@ export function SyncManager({ children }: SyncManagerProps) {
             
             const allNames = Object.keys(updatedColors)
             const activeAreas = allNames.filter(n => !updatedArchived.includes(n))
-            console.log("DB FETCHED AREAS (Realtime):", activeAreas)
             
             if (newData.skill_colors) {
               setAreas(activeAreas)
@@ -180,18 +185,18 @@ export function SyncManager({ children }: SyncManagerProps) {
       // Listen to Shop Rewards changes
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "shop_rewards", filter: `user_id=eq.${userId}` },
+        { event: "*", schema: "public", table: "shop_rewards", filter: `user_id=eq.${userIdState}` },
         async () => {
-          const { data } = await supabase.from("shop_rewards").select("*", { count: "exact" }).eq("user_id", userId).order("created_at", { ascending: false })
+          const { data } = await supabase.from("shop_rewards").select("*").eq("user_id", userIdState).order("created_at", { ascending: false })
           if (data) setRewards(data)
         }
       )
       // Listen to Transactions
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "transactions", filter: `user_id=eq.${userId}` },
+        { event: "INSERT", schema: "public", table: "transactions", filter: `user_id=eq.${userIdState}` },
         async () => {
-          const { data } = await supabase.from("transactions").select("*", { count: "exact" }).eq("user_id", userId).order("created_at", { ascending: false }).limit(50)
+          const { data } = await supabase.from("transactions").select("*").eq("user_id", userIdState).order("created_at", { ascending: false }).limit(50)
           if (data) setTransactions(data)
         }
       )
@@ -210,7 +215,7 @@ export function SyncManager({ children }: SyncManagerProps) {
     return () => {
       channel.unsubscribe()
     }
-  }, [isDataReady, nickname, userId])
+  }, [isDataReady, userIdState])
 
   if (error) {
     return (
@@ -224,7 +229,9 @@ export function SyncManager({ children }: SyncManagerProps) {
     )
   }
 
-  if (!isDataReady && nickname) {
+  // Only show the screen when we ARE logged in but data is not yet synchronized
+  // (Don't show on login page when userIdState is null)
+  if (!isDataReady && userIdState) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center space-y-6">
         <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin shadow-lg"></div>
@@ -236,7 +243,7 @@ export function SyncManager({ children }: SyncManagerProps) {
 
   return (
     <>
-      <DebugPanel userId={userId} realtimeStatus={realtimeStatus} />
+      <DebugPanel userId={userIdState} realtimeStatus={realtimeStatus} />
       {children}
     </>
   )

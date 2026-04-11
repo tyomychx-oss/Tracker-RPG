@@ -69,7 +69,7 @@ export default function SignInPage() {
             .from("user_profiles")
             .select("*")
             .eq("user_id", session.user.id)
-            .single()
+            .maybeSingle()
 
           if (profile) {
             const userProfile = {

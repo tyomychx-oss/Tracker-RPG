@@ -240,7 +240,7 @@ export function DatabaseSync() {
           onConflict: 'user_id'
         })
         .select()
-        .single()
+        .maybeSingle()
 
       if (error) {
         console.error("Sync error:", error.message || "Unknown error")

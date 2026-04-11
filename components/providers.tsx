@@ -409,7 +409,7 @@ export function AreasProvider({ children }: { children: ReactNode }) {
       .from("user_profiles")
       .select("skill_colors")
       .eq("user_id", session.user.id)
-      .single()
+      .maybeSingle()
     
     const currentColors = profile?.skill_colors || {}
     const updatedColors = { ...currentColors, [name]: color }
@@ -436,7 +436,7 @@ export function AreasProvider({ children }: { children: ReactNode }) {
       .from("user_profiles")
       .select("skill_colors, skill_xps, archived_areas")
       .eq("user_id", session.user.id)
-      .single()
+      .maybeSingle()
     
     if (!profile) return
 
@@ -468,7 +468,7 @@ export function AreasProvider({ children }: { children: ReactNode }) {
         .from("user_profiles")
         .select("archived_areas")
         .eq("user_id", session.user.id)
-        .single()
+        .maybeSingle()
       
       const currentArchived = profile?.archived_areas || []
       const updatedArchived = currentArchived.includes(name) ? currentArchived : [...currentArchived, name]
@@ -493,7 +493,7 @@ export function AreasProvider({ children }: { children: ReactNode }) {
         .from("user_profiles")
         .select("archived_areas")
         .eq("user_id", session.user.id)
-        .single()
+        .maybeSingle()
       
       const currentArchived = profile?.archived_areas || []
       const updatedArchived = currentArchived.filter((a: string) => a !== name)

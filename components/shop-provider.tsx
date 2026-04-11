@@ -2,8 +2,10 @@
 
 import React, { createContext, useContext, useState, type ReactNode } from "react"
 import { createClient } from "@/utils/supabase/client"
-import { useSparks } from "@/components/providers"
+import { useSparks, useRecentActivity } from "@/components/providers"
 import { handleSupabaseError } from "@/lib/handle-auth-error"
+import { processCommerceAction } from "@/lib/supabase-actions"
+import { toast } from "sonner"
 
 export interface ShopReward {
     id: string
@@ -52,7 +54,8 @@ export function ShopProvider({ children }: { children: ReactNode }) {
     const [rewards, setRewards] = useState<ShopReward[]>([])
     const [transactions, setTransactions] = useState<Transaction[]>([])
     const [isLoading, setIsLoading] = useState(true)
-    const { sparks } = useSparks()
+    const { sparks, setSparks } = useSparks()
+    const { setActivities } = useRecentActivity()
 
     const supabase = createClient()
 
@@ -71,52 +74,65 @@ export function ShopProvider({ children }: { children: ReactNode }) {
     }
 
     const buyReward = async (reward: ShopReward): Promise<boolean> => {
-        if (sparks < reward.cost) return false
+        if (sparks < reward.cost) {
+            toast.error("Insufficient Sparks")
+            return false
+        }
 
-        const { data: { session } } = await supabase.auth.getSession()
-        if (!session) return false
+        const previousSparks = sparks
+        // Optimistic UI update
+        setSparks(prev => prev - reward.cost)
 
-        // Update sparks in profile
-        await supabase
-            .from("user_profiles")
-            .update({ sparks: Math.max(0, sparks - reward.cost) })
-            .eq("user_id", session.user.id)
-
-        await recordTransaction(reward.title, reward.cost, "purchase")
-        return true
+        try {
+            await processCommerceAction(reward.cost)
+            await recordTransaction(reward.title, reward.cost, "purchase")
+            return true
+        } catch (error: any) {
+            // Revert on failure
+            setSparks(previousSparks)
+            toast.error(error.message || "Failed to purchase item")
+            return false
+        }
     }
 
     const spinWheel = async (): Promise<ShopReward | null> => {
         const SPIN_COST = 35
-        if (sparks < SPIN_COST) return null
-
-        const { data: { session } } = await supabase.auth.getSession()
-        if (!session) return null
+        if (sparks < SPIN_COST) {
+            toast.error("Insufficient Sparks")
+            return null
+        }
 
         const pool = rewards.filter(r => r.is_in_wheel)
         if (pool.length === 0) return null
 
-        // Update sparks in profile
-        await supabase
-            .from("user_profiles")
-            .update({ sparks: Math.max(0, sparks - SPIN_COST) })
-            .eq("user_id", session.user.id)
+        const previousSparks = sparks
+        // Optimistic UI update
+        setSparks(prev => prev - SPIN_COST)
 
-        // Weighted random selection based on drop_chance
-        const totalWeight = pool.reduce((sum, r) => sum + r.drop_chance, 0)
-        let random = Math.random() * totalWeight
+        try {
+            await processCommerceAction(SPIN_COST)
+            
+            // Weighted random selection based on drop_chance
+            const totalWeight = pool.reduce((sum, r) => sum + r.drop_chance, 0)
+            let random = Math.random() * totalWeight
 
-        let winner = pool[0]
-        for (const reward of pool) {
-            random -= reward.drop_chance
-            if (random <= 0) {
-                winner = reward
-                break
+            let winner = pool[0]
+            for (const reward of pool) {
+                random -= reward.drop_chance
+                if (random <= 0) {
+                    winner = reward
+                    break
+                }
             }
-        }
 
-        await recordTransaction(winner.title, SPIN_COST, "wheel_spin")
-        return winner
+            await recordTransaction(winner.title, SPIN_COST, "wheel_spin")
+            return winner
+        } catch (error: any) {
+            // Revert on failure
+            setSparks(previousSparks)
+            toast.error(error.message || "Failed to spin wheel")
+            return null
+        }
     }
 
     const addReward = async (rewardData: Omit<ShopReward, "id">) => {
@@ -135,7 +151,7 @@ export function ShopProvider({ children }: { children: ReactNode }) {
                 .from("shop_rewards")
                 .insert({ ...rewardData, user_id: session.user.id })
                 .select()
-                .single()
+                .maybeSingle()
 
             if (error) throw error
             

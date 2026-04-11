@@ -11,11 +11,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Pencil, ChevronDown, ChevronUp, Trash2, Plus, X, Zap, Pin, PinOff, GripVertical } from "lucide-react"
+import { Pencil, ChevronDown, ChevronUp, Trash2, Plus, X, Zap, Pin, PinOff, GripVertical, Flame, Check, RotateCcw } from "lucide-react"
 import { useXP, useAreaColors, useAreaFilter, useRecentActivity, useUIColor, useAreaXP, useQuests, useSparks, useAreas } from "@/components/providers"
 import { createClient } from "@/utils/supabase/client"
 import { syncQuestCompletion, updateQuests, updateProfile } from "@/lib/supabase-actions"
 import { addXPToState, removeXPFromState } from "@/lib/rpg-logic"
+import { toast } from "sonner"
 
 export function ActiveQuests() {
     const { quests, taskSnapshots, setQuests, setTaskSnapshots } = useQuests()
@@ -51,6 +52,29 @@ export function ActiveQuests() {
 
     const [draggedQuest, setDraggedQuest] = useState<{ id: number; category: "plans" | "dailies" | "habits" } | null>(null)
 
+    const handleUndoHabitProgress = async (category: "plans" | "dailies" | "habits", questId: number, xpAmount: number, skillName: string) => {
+        const questObj = quests[category].find((q: any) => q.id === questId) as any;
+        if (!questObj) return;
+
+        if (questObj.completed) {
+            handleToggleQuest(category, questId, xpAmount, true, questObj.title, skillName);
+            return;
+        }
+
+        let newQuests = JSON.parse(JSON.stringify(quests));
+        const qIdx = newQuests[category].findIndex((q: any) => q.id === questId);
+        if (qIdx !== -1 && newQuests[category][qIdx].currentWeeklyProgress > 0) {
+            newQuests[category][qIdx].currentWeeklyProgress -= 1;
+        }
+
+        const { error } = await updateQuests(newQuests);
+        if (!error) {
+            setQuests(newQuests);
+        } else {
+            toast.error("Failed to undo progress");
+        }
+    };
+
     // 1. QUEST COMPLETION / TOGGLE
     const handleToggleQuest = async (
         category: "plans" | "dailies" | "habits",
@@ -64,6 +88,8 @@ export function ActiveQuests() {
         const questObj = quests[category].find((q: any) => q.id === questId) as any
         if (!questObj) return
 
+        const isHabit = category === "habits" || questObj.taskType === "habit" || questObj.taskType === "habits" || (questObj.weeklyTarget && questObj.weeklyTarget > 0);
+
         let newQuests = JSON.parse(JSON.stringify(quests))
         let newXpState = { totalXP, currentLevel, maxXP }
         let sparkChange = 0
@@ -71,6 +97,26 @@ export function ActiveQuests() {
         let newSnapshots = { ...taskSnapshots }
 
         const reward = (questObj as any)?.reward || (questObj?.rating === "fast" ? 5 : questObj?.rating === "short" ? 10 : questObj?.rating === "deep" ? 25 : questObj?.rating === "hard" ? 50 : 0)
+
+        let targetXpAmount = xpAmount
+        let targetSparkChange = reward
+
+        if (isHabit) {
+            const wTarget = questObj.weeklyTarget || 7
+            if (!isCompleted) {
+                const newProgress = (questObj.currentWeeklyProgress || 0) + 1
+                if (newProgress < wTarget) {
+                    targetXpAmount = 0
+                    targetSparkChange = 0
+                } else {
+                    targetXpAmount = xpAmount * wTarget
+                    targetSparkChange = reward * wTarget
+                }
+            } else {
+                targetXpAmount = xpAmount * wTarget
+                targetSparkChange = reward * wTarget
+            }
+        }
 
         if (isCompleted) {
             // UNCOMPLETE
@@ -84,35 +130,41 @@ export function ActiveQuests() {
                 } as any
                 delete newSnapshots[questId]
             } else {
-                newXpState = removeXPFromState(totalXP, currentLevel, xpAmount)
+                newXpState = removeXPFromState(totalXP, currentLevel, targetXpAmount)
             }
-            sparkChange = -reward
-            newActivities = [{ id: Date.now(), action: `Uncompleted: ${questTitle}`, timestamp: Date.now(), xp: -xpAmount, type: category }, ...newActivities]
+            sparkChange = -targetSparkChange
+            newActivities = [{ id: Date.now(), action: `Uncompleted: ${questTitle}`, timestamp: Date.now(), xp: -targetXpAmount, type: category }, ...newActivities]
 
             const qIdx = newQuests[category].findIndex((q: any) => q.id === questId)
             if (qIdx !== -1) {
                 newQuests[category][qIdx].completed = false
                 newQuests[category][qIdx].lastCompletedDate = null
+                if (isHabit) {
+                    const wTarget = newQuests[category][qIdx].weeklyTarget || 7;
+                    newQuests[category][qIdx].streak = Math.max(0, (newQuests[category][qIdx].streak || 0) - 1)
+                    newQuests[category][qIdx].currentWeeklyProgress = Math.max(0, wTarget - 1)
+                }
             }
         } else {
             // COMPLETE
-            newSnapshots[questId] = {
-                questId,
-                previousLevel: currentLevel,
-                previousXP: totalXP,
-                previousMaxXP: maxXP,
-                previousSkillXP: areaXPs[skillName] || 0,
-            }
-            newXpState = addXPToState(totalXP, currentLevel, xpAmount)
-            sparkChange = reward
-            newActivities = [{ id: Date.now(), action: `Completed: ${questTitle}`, timestamp: Date.now(), xp: xpAmount, type: category, sparks: reward }, ...newActivities]
-
             const qIdx = newQuests[category].findIndex((q: any) => q.id === questId)
+            let isIntermediate = false
+            let wTarget = 1
+            let cProgress = 1
+            
             if (qIdx !== -1) {
-                if (category === "habits") {
-                    newQuests[category][qIdx].streak = (newQuests[category][qIdx].streak || 0) + 1
-                    newQuests[category][qIdx].completed = true
-                    newQuests[category][qIdx].lastCompletedDate = today
+                if (isHabit) {
+                    wTarget = newQuests[category][qIdx].weeklyTarget || 7
+                    cProgress = (newQuests[category][qIdx].currentWeeklyProgress || 0) + 1
+                    newQuests[category][qIdx].currentWeeklyProgress = cProgress
+
+                    if (cProgress >= wTarget) {
+                        newQuests[category][qIdx].streak = (newQuests[category][qIdx].streak || 0) + 1
+                        newQuests[category][qIdx].completed = true
+                        newQuests[category][qIdx].lastCompletedDate = today
+                    } else {
+                        isIntermediate = true
+                    }
                 } else if (category === "dailies") {
                     const freq = questObj?.frequencyCount ?? questObj?.frequency ?? 1
                     const count = (questObj?.completedCount || 0) + 1
@@ -124,13 +176,28 @@ export function ActiveQuests() {
                     newQuests[category][qIdx].lastCompletedDate = today
                 }
             }
+
+            if (!isIntermediate) {
+                newSnapshots[questId] = {
+                    questId,
+                    previousLevel: currentLevel,
+                    previousXP: totalXP,
+                    previousMaxXP: maxXP,
+                    previousSkillXP: areaXPs[skillName] || 0,
+                }
+                newXpState = addXPToState(totalXP, currentLevel, targetXpAmount)
+                sparkChange = targetSparkChange
+                newActivities = [{ id: Date.now(), action: `Completed: ${questTitle}`, timestamp: Date.now(), xp: targetXpAmount, type: category, sparks: targetSparkChange }, ...newActivities]
+            } else {
+                toast.success(`Progress saved! ${cProgress}/${wTarget} to Weekly Prize 🔥`)
+            }
         }
 
         const result = await syncQuestCompletion({
             category,
             questId,
             isCompleted: !isCompleted,
-            xpChange: isCompleted ? -xpAmount : xpAmount,
+            xpChange: isCompleted ? -targetXpAmount : targetXpAmount,
             sparkChange,
             skillName,
             newQuestData: newQuests,
@@ -162,43 +229,75 @@ export function ActiveQuests() {
             ...activities
         ]
 
-        const result = await updateProfile({
-            quests: newQuests,
-            activities: newActivities.slice(0, 100)
-        })
+        try {
+            const { data, error } = await updateProfile({
+                quests: newQuests,
+                activities: newActivities.slice(0, 100)
+            })
 
-        if (result) {
+            if (error) {
+                toast.error(typeof error === 'string' ? error : "Failed to archive")
+                return
+            }
+
             setQuests(newQuests)
             setActivities(newActivities as any)
+        } catch (error: any) {
+            toast.error(error instanceof Error ? error.message : "An unexpected error occurred")
         }
     }
 
     const handleUnarchiveQuest = async (category: "plans" | "dailies" | "habits", questId: number, xpAmount: number, skillName: string) => {
         const newQuests = JSON.parse(JSON.stringify(quests))
         const qIdx = newQuests[category].findIndex((q: any) => q.id === questId)
+        
+        let shouldDeductXP = true;
+        
         if (qIdx !== -1) {
-            newQuests[category][qIdx].archivedAt = null
-            newQuests[category][qIdx].completed = false
+            const questObj = newQuests[category][qIdx];
+            questObj.archivedAt = null;
+            
+            const isHabit = category === "habits" || questObj.taskType === "habit" || questObj.taskType === "habits" || (questObj.weeklyTarget && questObj.weeklyTarget > 0);
+            
+            if (isHabit) {
+                // Keep the completion state, weekly target progress, and prevent XP rollback for habits
+                shouldDeductXP = false;
+            } else {
+                questObj.completed = false;
+            }
         }
 
-        const newXp = removeXPFromState(totalXP, currentLevel, xpAmount)
-        const newSkillXPs = { ...areaXPs }
-        if (skillName && skillName !== "none") {
-            newSkillXPs[skillName] = Math.max(0, (newSkillXPs[skillName] || 0) - xpAmount)
+        let newXp = { totalXP, currentLevel, maxXP };
+        let newSkillXPs = { ...areaXPs };
+        
+        if (shouldDeductXP) {
+            newXp = removeXPFromState(totalXP, currentLevel, xpAmount);
+            if (skillName && skillName !== "none") {
+                newSkillXPs[skillName] = Math.max(0, (newSkillXPs[skillName] || 0) - xpAmount);
+            }
         }
 
-        const result = await updateProfile({
-            quests: newQuests,
-            totalXP: newXp.totalXP,
-            currentLevel: newXp.currentLevel,
-            maxXP: newXp.maxXP,
-            skillXPs: newSkillXPs
-        })
+        try {
+            const { data, error } = await updateProfile({
+                quests: newQuests,
+                totalXP: newXp.totalXP,
+                currentLevel: newXp.currentLevel,
+                maxXP: newXp.maxXP,
+                skillXPs: newSkillXPs
+            })
 
-        if (result) {
+            if (error) {
+                toast.error(typeof error === 'string' ? error : "Failed to unarchive")
+                return
+            }
+
             setQuests(newQuests)
-            setXPState(newXp)
-            setAreaXPs(newSkillXPs)
+            if (shouldDeductXP) {
+                setXPState(newXp)
+                setAreaXPs(newSkillXPs)
+            }
+        } catch (error: any) {
+            toast.error(error instanceof Error ? error.message : "Error unarchiving quest")
         }
     }
 
@@ -211,14 +310,21 @@ export function ActiveQuests() {
             ...activities
         ]
 
-        const result = await updateProfile({
-            quests: newQuests,
-            activities: newActivities.slice(0, 100)
-        })
+        try {
+            const { data, error } = await updateProfile({
+                quests: newQuests,
+                activities: newActivities.slice(0, 100)
+            })
 
-        if (result) {
+            if (error) {
+                toast.error(typeof error === 'string' ? error : "Failed to delete")
+                return
+            }
+
             setQuests(newQuests)
             setActivities(newActivities as any)
+        } catch (error: any) {
+            toast.error(error instanceof Error ? error.message : "An unexpected error occurred")
         }
     }
 
@@ -242,8 +348,9 @@ export function ActiveQuests() {
             }
         }
 
-        const result = await updateQuests(newQuests)
-        if (result) setQuests(newQuests)
+        const { error } = await updateQuests(newQuests)
+        if (!error) setQuests(newQuests)
+        else toast.error("Failed to save quest changes")
         setEditingQuest(null)
     }
 
@@ -255,8 +362,9 @@ export function ActiveQuests() {
                 s.id === subtaskId ? { ...s, completed: !s.completed } : s
             )
         }
-        const result = await updateQuests(newQuests)
-        if (result) setQuests(newQuests)
+        const { error } = await updateQuests(newQuests)
+        if (!error) setQuests(newQuests)
+        else toast.error("Failed to toggle subtask")
     }
 
     const handlePinQuest = async (category: "plans" | "dailies" | "habits", questId: number, isPinned: boolean) => {
@@ -266,8 +374,9 @@ export function ActiveQuests() {
             newQuests[category][qIdx].pinned = !isPinned
             newQuests[category][qIdx].pinnedOrder = isPinned ? undefined : Date.now()
         }
-        const result = await updateQuests(newQuests)
-        if (result) setQuests(newQuests)
+        const { error } = await updateQuests(newQuests)
+        if (!error) setQuests(newQuests)
+        else toast.error("Failed to pin quest")
     }
 
     const handleEditQuest = (quest: any, category: "plans" | "dailies" | "habits") => {
@@ -310,8 +419,9 @@ export function ActiveQuests() {
             if (qIdx !== -1) newQuests[category][qIdx].pinnedOrder = index
         })
 
-        const result = await updateQuests(newQuests)
-        if (result) setQuests(newQuests)
+        const { error } = await updateQuests(newQuests)
+        if (!error) setQuests(newQuests)
+        else toast.error("Failed to reorder quests")
         setDraggedQuest(null)
     }
 
@@ -359,11 +469,14 @@ export function ActiveQuests() {
 
         const isPinned = quest.pinned && !isArchived
         const hasCategory = !!(quest.skill && quest.skill !== "none")
+        const isHabit = category === "habits" || quest.taskType === "habit" || quest.taskType === "habits" || (quest.weeklyTarget && quest.weeklyTarget > 0);
+        const wTarget = isHabit ? (quest.weeklyTarget || 7) : 1;
+        const cProgress = isHabit ? (quest.currentWeeklyProgress || 0) : 0;
 
         return (
             <div
                 key={quest.id}
-                className={`${isArchived ? "opacity-50" : quest.completed ? "opacity-70" : ""} ${isPinned ? "cursor-grab active:cursor-grabbing" : ""} ${draggedQuest?.id === quest.id ? "opacity-50" : ""}`}
+                className={`overflow-hidden ${isArchived ? "opacity-50" : quest.completed ? "opacity-70" : ""} ${isPinned ? "cursor-grab active:cursor-grabbing" : ""} ${draggedQuest?.id === quest.id ? "opacity-50" : ""}`}
                 draggable={isPinned}
                 onDragStart={isPinned ? () => setDraggedQuest({ id: quest.id, category }) : undefined}
                 onDragEnd={() => setDraggedQuest(null)}
@@ -377,7 +490,7 @@ export function ActiveQuests() {
                 }}
                 style={{
                     padding: "0",
-                    borderRadius: "0",
+                    borderRadius: "12px",
                     background: "transparent",
                     transition: "all 0.3s ease",
                 }}
@@ -423,14 +536,46 @@ export function ActiveQuests() {
                                 </button>
                             )}
 
-                            <Checkbox
-                                checked={quest.completed}
-                                onCheckedChange={() => {
-                                    handleToggleQuest(category, quest.id, quest.xp, quest.completed, quest.title, quest.skill)
-                                }}
-                                className="h-5 w-5 border border-gray-300"
-                                disabled={isArchived}
-                            />
+                            {isHabit ? (
+                                <div className="flex items-center gap-1.5">
+                                    {cProgress > 0 && !isArchived && (
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleUndoHabitProgress(category, quest.id, quest.xp, quest.skill);
+                                            }}
+                                            className="flex items-center justify-center w-5 h-5 rounded-md opacity-40 hover:opacity-100 hover:bg-gray-500/20 transition-all text-muted-foreground"
+                                            title="Undo progress"
+                                        >
+                                            <RotateCcw className="h-3.5 w-3.5" />
+                                        </button>
+                                    )}
+                                    <div
+                                        onClick={() => {
+                                            if (!isArchived) {
+                                                if (cProgress >= wTarget) return; // Disabled if already completed weekly target
+                                                handleToggleQuest(category, quest.id, quest.xp, quest.completed, quest.title, quest.skill)
+                                            }
+                                        }}
+                                        className={`flex items-center justify-center w-5 h-5 rounded-md border ${quest.completed ? "bg-orange-500 border-orange-500" : "border-orange-500/50"} ${(isArchived || cProgress >= wTarget) ? "opacity-50 cursor-default" : "cursor-pointer hover:bg-orange-500/20"}`}
+                                    >
+                                        {quest.completed ? (
+                                            <Check className="h-3 w-3 text-white" />
+                                        ) : (
+                                            <Plus className="h-3 w-3 text-orange-500" />
+                                        )}
+                                    </div>
+                                </div>
+                            ) : (
+                                <Checkbox
+                                    checked={quest.completed}
+                                    onCheckedChange={() => {
+                                        handleToggleQuest(category, quest.id, quest.xp, quest.completed, quest.title, quest.skill)
+                                    }}
+                                    className="h-5 w-5 border border-gray-300"
+                                    disabled={isArchived}
+                                />
+                            )}
                         </div>
 
                         <div style={{ flex: 1, minWidth: 0 }}>
@@ -438,6 +583,14 @@ export function ActiveQuests() {
                                 <div style={{ fontSize: "11px", color: skillColor, fontFamily: "'Crimson Pro', serif", letterSpacing: "0.12em", textTransform: "uppercase", fontStyle: "italic", lineHeight: "1", marginBottom: "2px" }}>— {quest.skill}</div>
                             )}
                             <h4 className="font-medium text-foreground" style={{ overflowWrap: 'break-word', wordBreak: 'break-word' }}>{quest.title}</h4>
+
+                            {isHabit && (
+                                <div className="flex items-center gap-0.5 mt-1 mb-2">
+                                    {[...Array(wTarget)].map((_, i) => (
+                                        <Flame key={i} className={`h-3 w-3 ${i < cProgress ? "text-orange-500 fill-orange-500" : "text-muted-foreground opacity-30"}`} />
+                                    ))}
+                                </div>
+                            )}
 
                             {quest.subtasks && quest.subtasks.length > 0 && (
                                 <div className="space-y-1 mt-2">
@@ -488,7 +641,7 @@ export function ActiveQuests() {
                                     <button className="h-6 w-6 p-0 bg-transparent border-none outline-none cursor-pointer text-gray-500 hover:text-white flex items-center justify-center hover:drop-shadow-[0_0_4px_rgba(255,255,255,0.7)]" onClick={(e) => { e.stopPropagation(); handleDeleteQuest(category, quest.id, quest.title) }}><Trash2 className="h-3 w-3" /></button>
                                 </>
                             )}
-                            {category === "habits" && (
+                            {isHabit && (
                                 <span className="text-xs flex items-center gap-1 ml-1 opacity-100">
                                     <span>🔥</span>
                                     {(quest as any).streak || 0}

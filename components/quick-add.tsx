@@ -20,6 +20,7 @@ export function QuickAdd() {
     const [dailyCount, setDailyCount] = useState("1")
     const [dailyPeriodDays, setDailyPeriodDays] = useState("1")
     const [dailyResetTime, setDailyResetTime] = useState("00:00")
+    const [habitWeeklyTarget, setHabitWeeklyTarget] = useState("3")
 
     const [showSubtasks, setShowSubtasks] = useState(false)
     const [subtasks, setSubtasks] = useState<{ id: string; title: string; completed: boolean }[]>([])
@@ -45,6 +46,7 @@ export function QuickAdd() {
             if (draft?.dailyCount) setDailyCount(draft.dailyCount)
             if (draft?.dailyPeriodDays) setDailyPeriodDays(draft.dailyPeriodDays)
             if (draft?.dailyResetTime) setDailyResetTime(draft.dailyResetTime)
+            if (draft?.habitWeeklyTarget) setHabitWeeklyTarget(draft.habitWeeklyTarget)
             if (draft?.showSubtasks) setShowSubtasks(draft.showSubtasks)
             if (Array.isArray(draft?.subtasks)) setSubtasks(draft.subtasks)
         } catch { }
@@ -52,10 +54,10 @@ export function QuickAdd() {
 
     useEffect(() => {
         try {
-            const draft = { taskName, taskType, taskSkill, taskXP, taskPriority, dailyCount, dailyPeriodDays, dailyResetTime, showSubtasks, subtasks }
+            const draft = { taskName, taskType, taskSkill, taskXP, taskPriority, dailyCount, dailyPeriodDays, dailyResetTime, habitWeeklyTarget, showSubtasks, subtasks }
             sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft))
         } catch { }
-    }, [taskName, taskType, taskSkill, taskXP, taskPriority, dailyCount, dailyPeriodDays, dailyResetTime, showSubtasks, subtasks])
+    }, [taskName, taskType, taskSkill, taskXP, taskPriority, dailyCount, dailyPeriodDays, dailyResetTime, habitWeeklyTarget, showSubtasks, subtasks])
 
     const handleAddSubtask = () => {
         setSubtasks((prev) => [...prev, { id: crypto.randomUUID(), title: "", completed: false }])
@@ -94,7 +96,10 @@ export function QuickAdd() {
             base.periodStartAt = Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate())
         }
         if (taskType === "habits") {
+            base.taskType = "habit"
             base.streak = 0
+            base.weeklyTarget = Number(habitWeeklyTarget || "3")
+            base.currentWeeklyProgress = 0
         }
 
         const newQuests = JSON.parse(JSON.stringify(quests))
@@ -106,14 +111,17 @@ export function QuickAdd() {
         ]
 
         try {
-            const result = await updateProfile({
+            const { data, error } = await updateProfile({
                 quests: newQuests,
                 activities: newActivities.slice(0, 100)
             })
 
-            if (result) {
+            if (!error) {
                 setQuests(newQuests)
                 setActivities(newActivities as any)
+            } else {
+                console.error("Failed to add task:", error)
+                // Optionally add a toast here if needed
             }
 
             // Reset form
@@ -204,7 +212,9 @@ export function QuickAdd() {
                     </div>
 
                     <div className="space-y-2">
-                        <Label htmlFor="task-xp" className="text-foreground">XP Reward</Label>
+                        <Label htmlFor="task-xp" className="text-foreground">
+                            {taskType === "habits" ? "XP Reward (per session)" : "XP Reward"}
+                        </Label>
                         <Input id="task-xp" type="number" placeholder="25" value={taskXP} onChange={(e) => setTaskXP(e.target.value)} className="bg-input font-mono" />
                     </div>
 
@@ -229,6 +239,18 @@ export function QuickAdd() {
                                 <Select value={dailyResetTime} onValueChange={setDailyResetTime}>
                                     <SelectTrigger id="task-reset" className="bg-input"><SelectValue /></SelectTrigger>
                                     <SelectContent>{[...Array(24)].map((_, h) => { const label = `${String(h).padStart(2, "0")}:00`; return (<SelectItem key={label} value={label}>{label}</SelectItem>) })}</SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+                    )}
+
+                    {taskType === "habits" && (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="habit-weekly-target" className="text-foreground">Times per Week</Label>
+                                <Select value={habitWeeklyTarget} onValueChange={setHabitWeeklyTarget}>
+                                    <SelectTrigger id="habit-weekly-target" className="bg-input"><SelectValue /></SelectTrigger>
+                                    <SelectContent>{[...Array(7)].map((_, i) => (<SelectItem key={i + 1} value={String(i + 1)}>{i + 1} {(i + 1) === 1 ? 'time' : 'times'}</SelectItem>))}</SelectContent>
                                 </Select>
                             </div>
                         </div>

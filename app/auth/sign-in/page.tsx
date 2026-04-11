@@ -95,8 +95,7 @@ export default function SignInPage() {
         console.error("Failed to sync profile from server:", err)
       }
 
-      router.push("/")
-      router.refresh()
+      window.location.href = "/"
     } catch (err) {
       setError("An unexpected error occurred")
       setLoading(false)

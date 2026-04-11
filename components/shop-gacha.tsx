@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef, useEffect } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { useShop } from "@/components/shop-provider"
@@ -9,7 +9,6 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Loader2, Sparkles, Trophy, Settings2 } from "lucide-react"
-// IMPORT FIXED: Import at the top level
 import { ShopManageDialog } from "@/components/shop-manage-dialog"
 
 export function ShopGacha() {
@@ -17,31 +16,24 @@ export function ShopGacha() {
     const { uiColor } = useUIColor()
     const { sparks } = useSparks()
     const [isSpinning, setIsSpinning] = useState(false)
-    // TYPE FIXED: Allow any properties (like icon) on winner
     const [winner, setWinner] = useState<any | null>(null)
     const [isOpen, setIsOpen] = useState(false)
 
-    // Roulette state
-    const [rouletteItems, setRouletteItems] = useState<any[]>([])
-    const [rouletteOffset, setRouletteOffset] = useState(0)
-    const [rouletteTransition, setRouletteTransition] = useState("none")
-
+    // Wheel state
+    const [rotation, setRotation] = useState(0)
+    const [transitionStyle, setTransitionStyle] = useState("none")
+    
     const pool = rewards.filter(r => r.is_in_wheel)
-    const ITEM_WIDTH = 120 // Width of each card in roulette
-    const VISIBLE_ITEMS = 5 // Number of items visible in the window
+    const SPIN_DURATION = 4000
+    const SPIN_COST = 35
 
     const handleSpin = async () => {
-        if (pool.length === 0 || sparks < 35) return
+        if (pool.length === 0 || sparks < SPIN_COST || isSpinning) return
 
         setIsSpinning(true)
         setWinner(null)
-        setRouletteTransition("none")
-        setRouletteOffset(0)
-
-        const spinDuration = 4000 // 4 seconds
-        const targetIndex = 30 // The index we will land on
-
-        // 1. Get the result first
+        
+        // 1. Get the logical result from the backend/provider
         const result = await spinWheel()
 
         if (!result) {
@@ -49,155 +41,146 @@ export function ShopGacha() {
             return
         }
 
-        // 2. Build the strip
-        const stripLength = targetIndex + 5
-        const newRouletteItems = []
-        for (let i = 0; i < stripLength; i++) {
-            if (i === targetIndex) {
-                newRouletteItems.push(result)
-            } else {
-                newRouletteItems.push(pool[Math.floor(Math.random() * pool.length)])
-            }
-        }
-        setRouletteItems(newRouletteItems)
+        // 2. Calculate the exact rotation needed
+        const winnerIndex = pool.findIndex(r => r.id === result.id)
+        const anglePerSlice = 360 / pool.length
+        
+        // The slice is positioned clockwise. 
+        // Slice 0 starts at 0deg. 
+        // Slice i center is at (i * anglePerSlice) + (anglePerSlice / 2)
+        const winnerCenter = (winnerIndex * anglePerSlice) + (anglePerSlice / 2)
+        
+        // To center the winner at the TOP (0deg), we need to rotate the wheel by -winnerCenter.
+        // We add current rotation to keep it spinning forward.
+        const extraSpins = 5
+        const currentRotationBase = rotation - (rotation % 360)
+        const targetRotation = currentRotationBase + (extraSpins * 360) + (360 - winnerCenter)
 
-        // 3. Start Animation
-        requestAnimationFrame(() => {
-            const randomOffset = (Math.random() - 0.5) * 0.8 * ITEM_WIDTH
-            const windowCenter = (VISIBLE_ITEMS * ITEM_WIDTH) / 2
-            const itemCenter = (targetIndex * ITEM_WIDTH) + (ITEM_WIDTH / 2)
-            const finalOffset = -(itemCenter - windowCenter) + randomOffset
+        // 3. Start Visual Animation
+        setTransitionStyle(`transform ${SPIN_DURATION}ms cubic-bezier(0.15, 0, 0.15, 1)`)
+        setRotation(targetRotation)
 
-            setTimeout(() => {
-                setRouletteTransition(`transform ${spinDuration}ms cubic-bezier(0.1, 0.7, 0.1, 1)`)
-                setRouletteOffset(finalOffset)
-            }, 50)
-
-            // 4. Show Result Dialog after animation
-            setTimeout(() => {
-                setWinner(result)
-                setIsOpen(true)
-                setIsSpinning(false)
-            }, spinDuration + 500)
-        })
+        // 4. Show Result Dialog after animation finishes
+        setTimeout(() => {
+            setWinner(result)
+            setIsOpen(true)
+            setIsSpinning(false)
+        }, SPIN_DURATION + 300)
     }
 
     return (
         <>
-            {/* Main Gacha Card */}
             <div className="relative overflow-hidden rounded-xl border border-border bg-card p-6 md:p-10 text-center">
-                {/* Ambient Glow */}
                 <div className="absolute inset-0 opacity-10 blur-3xl bg-gradient-radial from-orange-500 to-transparent" />
 
-                <div className="relative z-10 flex flex-col items-center gap-6">
-                    {/* Roulette Window */}
-                    <div className="relative h-[140px] w-full max-w-[600px] bg-black/40 border-y-4 border-yellow-500/30 overflow-hidden shadow-inner flex items-center mb-4">
-                        {/* Center Indicator */}
-                        <div className="absolute left-1/2 top-0 bottom-0 w-1 bg-yellow-500 z-30 -translate-x-1/2 shadow-[0_0_10px_#eab308]" />
-                        <div className="absolute left-1/2 top-0 -translate-x-1/2 -mt-1 text-yellow-500 z-30">▼</div>
-                        <div className="absolute left-1/2 bottom-0 -translate-x-1/2 -mb-1 text-yellow-500 z-30">▲</div>
+                <div className="relative z-10 flex flex-col items-center gap-8">
+                    {/* Wheel Container */}
+                    <div className="relative w-72 h-72 md:w-96 md:h-96">
+                        {/* The Indicator Pin */}
+                        <div className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-2 z-30 filter drop-shadow(0 2px 4px rgba(0,0,0,0.5))">
+                            <div className="w-6 h-8 bg-yellow-500 clip-path-pin" style={{ clipPath: "polygon(50% 100%, 0 0, 100% 0)" }} />
+                            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-white/50" />
+                        </div>
 
-                        {/* Scrolling Strip */}
-                        {isSpinning || rouletteItems.length > 0 ? (
-                            <div
-                                className="flex items-center h-full pl-[50%]"
-                                style={{
-                                    transform: `translateX(${rouletteOffset}px)`,
-                                    transition: rouletteTransition,
-                                    width: "max-content",
-                                    willChange: "transform"
-                                }}
-                            >
-                                {rouletteItems.map((item, i) => (
-                                    <div
-                                        key={i}
-                                        className="shrink-0 flex items-center justify-center p-2"
-                                        style={{ width: `${ITEM_WIDTH}px`, height: "100%" }}
-                                    >
-                                        <div className="w-full h-24 rounded-lg flex flex-col items-center justify-center p-2 text-center text-xs font-bold border bg-card border-border text-muted-foreground">
-                                            <div className="text-2xl mb-1">{item.icon || "🎁"}</div>
-                                            <span className="line-clamp-2">{item.title}</span>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        ) : pool.length > 0 ? (
-                            <div className="flex items-center h-full justify-center gap-2">
-                                {pool.slice(0, VISIBLE_ITEMS).map((item, i) => (
-                                    <div
+                        {/* Outer Ring */}
+                        <div className="absolute inset-0 rounded-full border-[12px] border-secondary shadow-[0_0_40px_rgba(0,0,0,0.5),inset_0_0_20px_rgba(0,0,0,0.5)] z-20 pointer-events-none" />
+                        
+                        {/* Glowing Border */}
+                        <div className="absolute -inset-2 rounded-full border-2 border-orange-500/20 animate-pulse pointer-events-none" />
+
+                        {/* The Wheel itself */}
+                        <div 
+                            className="absolute inset-0 rounded-full overflow-hidden transition-transform will-change-transform bg-background"
+                            style={{ 
+                                transform: `rotate(${rotation}deg)`,
+                                transition: transitionStyle,
+                                background: `conic-gradient(${pool.map((_, i) => {
+                                    const angle = 360 / pool.length;
+                                    const colors = [
+                                        "rgba(222, 101, 80, 0.8)",
+                                        "rgba(30, 41, 59, 0.8)",
+                                        "rgba(251, 146, 60, 0.8)",
+                                        "rgba(15, 23, 42, 0.8)"
+                                    ];
+                                    const c = colors[i % colors.length];
+                                    return `${c} ${i * angle}deg ${(i + 1) * angle}deg`;
+                                }).join(", ")})`
+                            }}
+                        >
+                            {pool.map((item, i) => {
+                                const angle = 360 / pool.length
+                                const midAngle = (i * angle) + (angle / 2)
+                                
+                                return (
+                                    <div 
                                         key={item.id}
-                                        className="shrink-0 flex items-center justify-center p-2"
-                                        style={{ width: `${ITEM_WIDTH}px`, height: "100%" }}
+                                        className="absolute inset-0"
+                                        style={{ transform: `rotate(${midAngle}deg)` }}
                                     >
-                                        <div className="w-full h-24 rounded-lg flex flex-col items-center justify-center p-2 text-center text-xs font-bold border bg-card border-border text-muted-foreground">
-                                            <div className="text-2xl mb-1">{item.icon || "🎁"}</div>
-                                            <span className="line-clamp-2">{item.title}</span>
+                                        <div className="absolute top-0 left-1/2 -translate-x-1/2 mt-8 md:mt-12 flex flex-col items-center gap-1">
+                                            <span className="text-2xl md:text-3xl filter drop-shadow-md">{item.icon || "🎁"}</span>
+                                            <span className="text-[10px] md:text-xs font-bold text-white max-w-[60px] line-clamp-1 leading-tight uppercase tracking-tighter opacity-80">
+                                                {item.title}
+                                            </span>
                                         </div>
                                     </div>
-                                ))}
-                            </div>
-                        ) : (
-                            <div className="w-full h-full flex items-center justify-center text-muted-foreground/50 tracking-widest font-mono uppercase">
-                                Ready to Spin
-                            </div>
-                        )}
+                                )
+                            })}
+                        </div>
 
-                        {/* Gradients to fade edges */}
-                        <div className="absolute left-0 top-0 bottom-0 w-16 bg-gradient-to-r from-card to-transparent z-20 pointer-events-none" />
-                        <div className="absolute right-0 top-0 bottom-0 w-16 bg-gradient-to-l from-card to-transparent z-20 pointer-events-none" />
+                        {/* Center Cap */}
+                        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 md:w-16 md:h-16 rounded-full bg-secondary border-4 border-border shadow-xl z-30 flex items-center justify-center">
+                            <Sparkles className="h-6 w-6 text-orange-500 animate-spin-slow" />
+                        </div>
                     </div>
 
-                    <div className="p-1 px-4 rounded-full bg-background/50 border border-border text-sm font-mono text-muted-foreground">
-                        Pool Size: <span className="text-foreground font-bold">{pool.length}</span> items
+                    <div className="p-1 px-4 rounded-full bg-background/50 border border-border text-sm font-mono text-muted-foreground mt-4">
+                        Rewards Pool: <span className="text-foreground font-bold">{pool.length}</span>
                     </div>
 
                     <div className="flex items-center gap-4">
                         <Button
                             size="lg"
-                            className={`h-16 px-8 text-xl font-bold bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 border-0 transition-all hover:scale-105 ${sparks >= 35 ? "shadow-[0_0_20px_rgba(234,88,12,0.8)] animate-pulse" : "shadow-none opacity-50 grayscale cursor-not-allowed"
-                                }`}
+                            className={`h-16 px-8 text-xl font-bold bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 border-0 transition-all hover:scale-105 ${
+                                sparks >= SPIN_COST ? "shadow-[0_0_20px_rgba(234,88,12,0.8)]" : "opacity-50 grayscale cursor-not-allowed"
+                            }`}
                             onClick={handleSpin}
-                            disabled={isSpinning || pool.length === 0 || sparks < 35}
+                            disabled={isSpinning || pool.length === 0 || sparks < SPIN_COST}
                         >
                             {isSpinning ? (
-                                <>
-                                    <Loader2 className="mr-3 h-6 w-6 animate-spin" />
-                                    FORGING...
-                                </>
-                            ) : pool.length === 0 ? (
-                                "Add items to Spin"
+                                <><Loader2 className="mr-3 h-6 w-6 animate-spin" />SPINNING...</>
                             ) : (
-                                <>
-                                    SPIN (35 ⚡)
-                                </>
+                                <>SPIN ({SPIN_COST} ⚡)</>
                             )}
                         </Button>
-
                         <PoolManager />
                     </div>
                 </div>
             </div>
 
             <Dialog open={isOpen} onOpenChange={setIsOpen}>
-                <DialogContent className="sm:max-w-md border-2 border-yellow-500/50 bg-black/95">
+                <DialogContent className="sm:max-w-md border-2 border-orange-500/50 bg-black/95 text-white">
                     <DialogHeader>
-                        <DialogTitle className="text-center text-3xl font-bold text-yellow-500">
-                            FATE HAS SPOKEN!
+                        <DialogTitle className="text-center text-3xl font-bold text-orange-500">
+                            REWARD UNLOCKED!
                         </DialogTitle>
-                        <DialogDescription className="sr-only">Your spin result</DialogDescription>
+                        <DialogDescription className="sr-only">Win result</DialogDescription>
                     </DialogHeader>
                     <div className="flex flex-col items-center py-8 space-y-6">
-                        <div className="h-24 w-24 rounded-full bg-yellow-500/20 flex items-center justify-center animate-bounce">
-                            <Trophy className="h-12 w-12 text-yellow-500" />
+                        <div className="h-28 w-28 rounded-full bg-orange-500/20 flex items-center justify-center animate-bounce border-2 border-orange-500/30">
+                            <Trophy className="h-16 w-16 text-orange-500" />
                         </div>
                         <div className="text-center space-y-2">
-                            <p className="text-muted-foreground text-sm uppercase tracking-widest">You won</p>
-                            <h3 className="text-2xl font-bold text-white max-w-[250px] mx-auto leading-tight">
+                            <p className="text-muted-foreground text-sm uppercase tracking-widest">Fortune favors you with</p>
+                            <h3 className="text-3xl font-black max-w-[300px] leading-tight">
                                 {winner?.title}
                             </h3>
                         </div>
-                        <Button onClick={() => setIsOpen(false)} className="w-full max-w-xs bg-yellow-600 hover:bg-yellow-700 text-white font-bold">
-                            CLAIM REWARD
+                        <Button 
+                            onClick={() => setIsOpen(false)} 
+                            className="w-full max-w-xs bg-orange-600 hover:bg-orange-700 font-bold h-12 text-lg"
+                        >
+                            ADD TO INVENTORY
                         </Button>
                     </div>
                 </DialogContent>
@@ -206,93 +189,8 @@ export function ShopGacha() {
     )
 }
 
-function RarityList({ rewards }: { rewards: any[] }) {
-    // Sort by drop_chance ascending (rarest first) and take top 8 (to avoid scrollbar)
-    const sortedRewards = [...rewards]
-        .sort((a, b) => a.drop_chance - b.drop_chance)
-        .slice(0, 8)
-
-    const legendary = sortedRewards.filter(r => r.drop_chance < 7)
-    const epic = sortedRewards.filter(r => r.drop_chance >= 7 && r.drop_chance < 15)
-    const rare = sortedRewards.filter(r => r.drop_chance >= 15 && r.drop_chance < 36)
-    const common = sortedRewards.filter(r => r.drop_chance >= 36)
-
-    const RaritySection = ({ title, items, color, glowColor }: any) => {
-        if (items.length === 0) return null
-
-        return (
-            <div className="mb-3">
-                <h3
-                    className="text-xs font-bold mb-1.5 uppercase tracking-wider"
-                    style={{
-                        color: color,
-                        textShadow: `0 0 8px ${glowColor}, 0 0 15px ${glowColor}`
-                    }}
-                >
-                    {title}
-                </h3>
-                <div className="space-y-0.5">
-                    {items.map((reward: any) => (
-                        <div
-                            key={reward.id}
-                            className="flex items-center justify-between text-xs px-2 py-1 rounded bg-background/30"
-                        >
-                            <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                                <span className="text-sm">{reward.icon || "🎁"}</span>
-                                <span className="truncate text-sm" style={{ color }}>{reward.title}</span>
-                            </div>
-                            <span
-                                className="font-mono font-bold ml-2 shrink-0 text-xs"
-                                style={{ color }}
-                            >
-                                {reward.drop_chance}%
-                            </span>
-                        </div>
-                    ))}
-                </div>
-            </div>
-        )
-    }
-
-    return (
-        <>
-            <h2 className="text-sm font-bold mb-3 text-foreground border-b border-border pb-2">
-                Rarity List
-            </h2>
-            <div className="space-y-2">
-                <RaritySection
-                    title="Legendary"
-                    items={legendary}
-                    color="#FFD700"
-                    glowColor="#FFD700"
-                />
-                <RaritySection
-                    title="Epic"
-                    items={epic}
-                    color="#DC143C"
-                    glowColor="#DC143C"
-                />
-                <RaritySection
-                    title="Rare"
-                    items={rare}
-                    color="#9370DB"
-                    glowColor="#9370DB"
-                />
-                <RaritySection
-                    title="Common"
-                    items={common}
-                    color="#C0C0C0"
-                    glowColor="#C0C0C0"
-                />
-            </div>
-        </>
-    )
-}
-
 function PoolManager() {
     const { rewards, updateReward, deleteReward } = useShop()
-    // REPAIR: Require removed, using top-level import
-
     return (
         <Dialog>
             <DialogTrigger asChild>
@@ -302,8 +200,8 @@ function PoolManager() {
             </DialogTrigger>
             <DialogContent className="sm:max-w-lg bg-card border-border">
                 <DialogHeader>
-                    <DialogTitle>Manage Fate Pool</DialogTitle>
-                    <DialogDescription className="sr-only">Configure which rewards appear in the wheel</DialogDescription>
+                    <DialogTitle>Configure Reward Wheel</DialogTitle>
+                    <DialogDescription className="sr-only">Settings</DialogDescription>
                 </DialogHeader>
                 <div className="max-h-[400px] overflow-y-auto space-y-2 py-4">
                     {rewards.length === 0 ? (
@@ -318,23 +216,14 @@ function PoolManager() {
                                 />
                                 <div className="text-2xl">{reward.icon || "🎁"}</div>
                                 <div className="flex-1">
-                                    <Label htmlFor={`pool-${reward.id}`} className="cursor-pointer font-medium text-foreground">
-                                        {reward.title}
-                                    </Label>
+                                    <Label htmlFor={`pool-${reward.id}`} className="cursor-pointer font-medium text-foreground">{reward.title}</Label>
                                     <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
-                                        <span className="font-mono">{reward.cost}⚡</span>
-                                        {reward.is_in_wheel && (
-                                            <span className="font-mono text-primary">Drop: {reward.drop_chance}%</span>
-                                        )}
+                                        <span className="font-mono text-primary">Weight: {reward.drop_chance}%</span>
                                     </div>
                                 </div>
                                 <div className="flex gap-1">
                                     <ShopManageDialog
-                                        trigger={
-                                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                                                <Settings2 className="h-4 w-4" />
-                                            </Button>
-                                        }
+                                        trigger={<Button variant="ghost" size="icon" className="h-8 w-8"><Settings2 className="h-4 w-4" /></Button>}
                                         data={reward}
                                         isEditing
                                     />
@@ -342,11 +231,7 @@ function PoolManager() {
                                         variant="ghost"
                                         size="icon"
                                         className="h-8 w-8 hover:text-destructive"
-                                        onClick={() => {
-                                            if (confirm(`Delete "${reward.title}"?`)) {
-                                                deleteReward(reward.id)
-                                            }
-                                        }}
+                                        onClick={() => { if (confirm(`Delete "${reward.title}"?`)) deleteReward(reward.id) }}
                                     >
                                         <span className="text-lg">🗑️</span>
                                     </Button>

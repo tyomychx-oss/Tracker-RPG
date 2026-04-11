@@ -30,6 +30,7 @@ export interface AreaXPContextType {
 export interface AreaColorsContextType {
   areaColors: Record<string, string>
   setAreaColors: React.Dispatch<React.SetStateAction<Record<string, string>>>
+  setAreaColor: (name: string, color: string) => Promise<void>
 }
 
 export interface AreaFilterContextType {
@@ -63,6 +64,8 @@ export interface Quest {
   reward?: number
   pinned?: boolean
   pinnedOrder?: number
+  weeklyTarget?: number
+  currentWeeklyProgress?: number
 }
 
 export interface TaskStateSnapshot {
@@ -278,9 +281,80 @@ export function XPProvider({ children }: { children: ReactNode }) {
         currentLevel: xpState.currentLevel,
         maxXP: xpState.maxXP,
         setXPState,
-        addXP: () => { }, // Dummy to satisfy types, actual logic moved to actions
-        removeXP: () => { },
-        resetXP: () => { },
+        addXP: async (amount: number) => {
+          setXPState((prev) => {
+            let newTotal = prev.totalXP + amount
+            let newLevel = prev.currentLevel
+            let newMax = prev.maxXP
+
+            while (newTotal >= newMax) {
+              newTotal -= newMax
+              newLevel += 1
+              newMax = Math.floor(newMax * 1.4)
+            }
+
+            const newState = { totalXP: newTotal, currentLevel: newLevel, maxXP: newMax }
+            
+            // Background persistence
+            supabase.auth.getSession().then(({ data: { session } }) => {
+              if (session) {
+                supabase
+                  .from("user_profiles")
+                  .update({
+                    total_xp: newState.totalXP,
+                    current_level: newState.currentLevel,
+                    max_xp: newState.maxXP,
+                  })
+                  .eq("user_id", session.user.id)
+                  .then(({ error }) => {
+                    if (error) console.error("Failed to sync addXP:", error)
+                  })
+              }
+            })
+
+            return newState
+          })
+        },
+        removeXP: async (amount: number) => {
+          setXPState((prev) => {
+            let newTotal = prev.totalXP - amount
+            let newLevel = prev.currentLevel
+            let newMax = prev.maxXP
+
+            while (newTotal < 0 && newLevel > 1) {
+              newLevel -= 1
+              // Reverse the 1.4x scaling (approximate, more accurate would be to precalculate)
+              newMax = Math.round(newMax / 1.4)
+              newTotal += newMax
+            }
+
+            if (newTotal < 0) newTotal = 0
+
+            const newState = { totalXP: newTotal, currentLevel: newLevel, maxXP: newMax }
+            
+            // Background persistence
+            supabase.auth.getSession().then(({ data: { session } }) => {
+              if (session) {
+                supabase
+                  .from("user_profiles")
+                  .update({
+                    total_xp: newState.totalXP,
+                    current_level: newState.currentLevel,
+                    max_xp: newState.maxXP,
+                  })
+                  .eq("user_id", session.user.id)
+                  .then(({ error }) => {
+                    if (error) console.error("Failed to sync removeXP:", error)
+                  })
+              }
+            })
+
+            return newState
+          })
+        },
+        resetXP: () => {
+          setXPState({ totalXP: 0, currentLevel: 1, maxXP: 200 })
+        },
       }}
     >
       {children}
@@ -301,7 +375,26 @@ export function AreaXPProvider({ children }: { children: ReactNode }) {
 
 export function AreaColorsProvider({ children }: { children: ReactNode }) {
   const [areaColors, setAreaColors] = useState<Record<string, string>>({})
-  return <AreaColorsContext.Provider value={{ areaColors, setAreaColors }}>{children}</AreaColorsContext.Provider>
+
+  const setAreaColor = async (name: string, color: string) => {
+    const { data: { session } } = await supabase.auth.getSession()
+    
+    // Optimistic Update
+    setAreaColors(prev => ({ ...prev, [name]: color }))
+
+    if (session) {
+      const { error } = await supabase
+        .from("user_profiles")
+        .update({ 
+          skill_colors: { ...areaColors, [name]: color } 
+        })
+        .eq("user_id", session.user.id)
+      
+      if (error) console.error("Failed to update area color:", error)
+    }
+  }
+
+  return <AreaColorsContext.Provider value={{ areaColors, setAreaColors, setAreaColor }}>{children}</AreaColorsContext.Provider>
 }
 
 export function AreaFilterProvider({ children }: { children: ReactNode }) {

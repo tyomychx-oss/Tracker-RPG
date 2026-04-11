@@ -9,7 +9,7 @@ const _geist = Geist({ subsets: ["latin"] })
 const _geistMono = Geist_Mono({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "Gamified Life RPG",
+  title: "QuestLife",
   description: "A minimalist cyberpunk dashboard for tracking your life like an RPG",
   generator: "v0.app",
   icons: {

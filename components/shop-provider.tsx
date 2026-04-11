@@ -2,8 +2,9 @@
 
 import React, { createContext, useContext, useState, type ReactNode } from "react"
 import { createClient } from "@/utils/supabase/client"
-import { useSparks } from "@/components/providers"
+import { useSparks, useRecentActivity } from "@/components/providers"
 import { handleSupabaseError } from "@/lib/handle-auth-error"
+import { toast } from "sonner"
 
 export interface ShopReward {
     id: string
@@ -52,7 +53,8 @@ export function ShopProvider({ children }: { children: ReactNode }) {
     const [rewards, setRewards] = useState<ShopReward[]>([])
     const [transactions, setTransactions] = useState<Transaction[]>([])
     const [isLoading, setIsLoading] = useState(true)
-    const { sparks } = useSparks()
+    const { sparks, setSparks } = useSparks()
+    const { setActivities } = useRecentActivity()
 
     const supabase = createClient()
 
@@ -71,16 +73,46 @@ export function ShopProvider({ children }: { children: ReactNode }) {
     }
 
     const buyReward = async (reward: ShopReward): Promise<boolean> => {
-        if (sparks < reward.cost) return false
+        if (sparks < reward.cost) {
+            toast.error("Insufficient Sparks")
+            return false
+        }
 
         const { data: { session } } = await supabase.auth.getSession()
         if (!session) return false
 
+        // OPTIMISTIC UI: Sparks
+        setSparks(prev => Math.max(0, prev - reward.cost))
+
+        // OPTIMISTIC UI: Activity History (Global RPG Activity)
+        setActivities(prev => [{
+            id: Date.now(),
+            action: `Purchased: ${reward.title}`,
+            sparks: -reward.cost,
+            timestamp: Date.now()
+        }, ...prev])
+
+        // OPTIMISTIC UI: Shop History (Local Shop Transactions)
+        const newTransaction: Transaction = {
+            id: crypto.randomUUID(),
+            reward_snapshot: reward.title,
+            cost: reward.cost,
+            type: "purchase",
+            created_at: new Date().toISOString()
+        }
+        setTransactions(prev => [newTransaction, ...prev])
+
         // Update sparks in profile
-        await supabase
+        const { error } = await supabase
             .from("user_profiles")
             .update({ sparks: Math.max(0, sparks - reward.cost) })
             .eq("user_id", session.user.id)
+
+        if (error) {
+            toast.error("Failed to purchase")
+            // Revert could be here, but sticking to requested "just add local update"
+            return false
+        }
 
         await recordTransaction(reward.title, reward.cost, "purchase")
         return true
@@ -114,6 +146,27 @@ export function ShopProvider({ children }: { children: ReactNode }) {
                 break
             }
         }
+
+        // OPTIMISTIC UI: Sparks
+        setSparks(prev => Math.max(0, prev - SPIN_COST))
+
+        // OPTIMISTIC UI: Activity History (Global RPG Activity)
+        setActivities(prev => [{
+            id: Date.now(),
+            action: `Wheel Spin: ${winner.title}`,
+            sparks: -SPIN_COST,
+            timestamp: Date.now()
+        }, ...prev])
+
+        // OPTIMISTIC UI: Shop History (Local Shop Transactions)
+        const newTransaction: Transaction = {
+            id: crypto.randomUUID(),
+            reward_snapshot: winner.title,
+            cost: SPIN_COST,
+            type: "wheel_spin",
+            created_at: new Date().toISOString()
+        }
+        setTransactions(prev => [newTransaction, ...prev])
 
         await recordTransaction(winner.title, SPIN_COST, "wheel_spin")
         return winner

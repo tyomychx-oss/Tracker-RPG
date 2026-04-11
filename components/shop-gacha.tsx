@@ -31,7 +31,7 @@ export function ShopGacha() {
     const VISIBLE_ITEMS = 5 // Number of items visible in the window
 
     const handleSpin = async () => {
-        if (pool.length === 0 || sparks < 35 || isSpinning) return
+        if (pool.length === 0 || sparks < 35) return
 
         setIsSpinning(true)
         setWinner(null)
@@ -41,50 +41,45 @@ export function ShopGacha() {
         const spinDuration = 4000 // 4 seconds
         const targetIndex = 30 // The index we will land on
 
-        try {
-            // 1. Get the result first
-            const result = await spinWheel()
+        // 1. Get the result first
+        const result = await spinWheel()
 
-            if (!result) {
-                setIsSpinning(false)
-                return
-            }
-
-            // 2. Build the strip
-            const stripLength = targetIndex + 5
-            const newRouletteItems = []
-            for (let i = 0; i < stripLength; i++) {
-                if (i === targetIndex) {
-                    newRouletteItems.push(result)
-                } else {
-                    newRouletteItems.push(pool[Math.floor(Math.random() * pool.length)])
-                }
-            }
-            setRouletteItems(newRouletteItems)
-
-            // 3. Start Animation
-            requestAnimationFrame(() => {
-                const randomOffset = (Math.random() - 0.5) * 0.8 * ITEM_WIDTH
-                const windowCenter = (VISIBLE_ITEMS * ITEM_WIDTH) / 2
-                const itemCenter = (targetIndex * ITEM_WIDTH) + (ITEM_WIDTH / 2)
-                const finalOffset = -(itemCenter - windowCenter) + randomOffset
-
-                setTimeout(() => {
-                    setRouletteTransition(`transform ${spinDuration}ms cubic-bezier(0.1, 0.7, 0.1, 1)`)
-                    setRouletteOffset(finalOffset)
-                }, 50)
-
-                // 4. Show Result Dialog after animation
-                setTimeout(() => {
-                    setWinner(result)
-                    setIsOpen(true)
-                    setIsSpinning(false)
-                }, spinDuration + 500)
-            })
-        } catch (error) {
-            console.error("Spin error:", error)
+        if (!result) {
             setIsSpinning(false)
+            return
         }
+
+        // 2. Build the strip
+        const stripLength = targetIndex + 5
+        const newRouletteItems = []
+        for (let i = 0; i < stripLength; i++) {
+            if (i === targetIndex) {
+                newRouletteItems.push(result)
+            } else {
+                newRouletteItems.push(pool[Math.floor(Math.random() * pool.length)])
+            }
+        }
+        setRouletteItems(newRouletteItems)
+
+        // 3. Start Animation
+        requestAnimationFrame(() => {
+            const randomOffset = (Math.random() - 0.5) * 0.8 * ITEM_WIDTH
+            const windowCenter = (VISIBLE_ITEMS * ITEM_WIDTH) / 2
+            const itemCenter = (targetIndex * ITEM_WIDTH) + (ITEM_WIDTH / 2)
+            const finalOffset = -(itemCenter - windowCenter) + randomOffset
+
+            setTimeout(() => {
+                setRouletteTransition(`transform ${spinDuration}ms cubic-bezier(0.1, 0.7, 0.1, 1)`)
+                setRouletteOffset(finalOffset)
+            }, 50)
+
+            // 4. Show Result Dialog after animation
+            setTimeout(() => {
+                setWinner(result)
+                setIsOpen(true)
+                setIsSpinning(false)
+            }, spinDuration + 500)
+        })
     }
 
     return (

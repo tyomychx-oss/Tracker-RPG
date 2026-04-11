@@ -1,5 +1,6 @@
 import { createClient } from "@/utils/supabase/client"
 import { type UserProfile, type Quest, type TaskStateSnapshot } from "@/components/providers"
+import { type Transaction } from "@/components/shop-provider"
 
 const supabase = createClient()
 
@@ -196,4 +197,69 @@ export async function resetAllUserProgress() {
   } catch (e) {}
 
   return true
+}
+
+/**
+ * Validates and processes a commerce transaction (purchase or spin).
+ * Ensures balance check and records both the transaction and activity.
+ */
+export async function processCommerceAction({
+  title,
+  cost,
+  type,
+  currentSparks
+}: {
+  title: string
+  cost: number
+  type: Transaction["type"]
+  currentSparks: number
+}) {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) throw new Error("Unauthorized")
+
+  // 1. Double-check balance from DB for safety
+  const { data: profile, error: fetchError } = await supabase
+    .from("user_profiles")
+    .select("sparks, activities")
+    .eq("user_id", session.user.id)
+    .single()
+
+  if (fetchError || !profile) throw new Error("Could not verify balance")
+  if (profile.sparks < cost) throw new Error("Insufficient sparks")
+
+  const newBalance = profile.sparks - cost
+  const newActivity = {
+    id: Date.now(),
+    action: type === "purchase" ? `Purchased ${title}` : `Won ${title} from wheel`,
+    timestamp: Date.now(),
+    sparks: -cost,
+    type: "purchase" as any
+  }
+  
+  const updatedActivities = [newActivity, ...(profile?.activities || [])].slice(0, 100)
+
+  // 2. Perform updates
+  const { error: updateError } = await supabase
+    .from("user_profiles")
+    .update({ 
+      sparks: newBalance,
+      activities: updatedActivities
+    })
+    .eq("user_id", session.user.id)
+
+  if (updateError) throw updateError
+
+  // 3. Record transaction
+  const { error: transError } = await supabase
+    .from("transactions")
+    .insert({
+      user_id: session.user.id,
+      reward_snapshot: title,
+      cost,
+      type
+    })
+
+  if (transError) console.error("Transaction record failed, but sparks deducted.", transError)
+
+  return { sparks: newBalance, activities: updatedActivities }
 }

@@ -27,19 +27,14 @@ export function ShopRewardCard({ reward }: { reward: ShopReward }) {
     }
 
     const handleBuy = async () => {
-        if (!canAfford || isBuying) return
+        if (!canAfford) return
         setIsBuying(true)
-        try {
-            const success = await buyReward(reward)
-            if (success) {
-                toast.success(`Purchased ${reward.title}!`)
-            } else {
-                toast.error("Purchase failed. Check your balance.")
-            }
-        } catch (error) {
-            toast.error("An unexpected error occurred.")
-        } finally {
-            setIsBuying(false)
+        const success = await buyReward(reward)
+        setIsBuying(false)
+        if (success) {
+            toast.success(`Purchased ${reward.title}!`)
+        } else {
+            toast.error("Not enough sparks!")
         }
     }
 

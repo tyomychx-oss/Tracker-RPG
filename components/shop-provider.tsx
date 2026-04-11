@@ -2,8 +2,9 @@
 
 import React, { createContext, useContext, useState, type ReactNode } from "react"
 import { createClient } from "@/utils/supabase/client"
-import { useSparks } from "@/components/providers"
+import { useSparks, useRecentActivity } from "@/components/providers"
 import { handleSupabaseError } from "@/lib/handle-auth-error"
+import { processCommerceAction } from "@/lib/supabase-actions"
 
 export interface ShopReward {
     id: string
@@ -52,7 +53,8 @@ export function ShopProvider({ children }: { children: ReactNode }) {
     const [rewards, setRewards] = useState<ShopReward[]>([])
     const [transactions, setTransactions] = useState<Transaction[]>([])
     const [isLoading, setIsLoading] = useState(true)
-    const { sparks } = useSparks()
+    const { sparks, setSparks } = useSparks()
+    const { setActivities } = useRecentActivity()
 
     const supabase = createClient()
 
@@ -73,17 +75,35 @@ export function ShopProvider({ children }: { children: ReactNode }) {
     const buyReward = async (reward: ShopReward): Promise<boolean> => {
         if (sparks < reward.cost) return false
 
-        const { data: { session } } = await supabase.auth.getSession()
-        if (!session) return false
+        // 1. Optimistic UI update
+        const previousSparks = sparks
+        setSparks(prev => Math.max(0, prev - reward.cost))
+        
+        // Add optimistic activity
+        const optimisticActivity = {
+            id: Date.now(),
+            action: `Purchased ${reward.title}`,
+            timestamp: Date.now(),
+            sparks: -reward.cost,
+            type: "purchase" as any
+        }
+        setActivities(prev => [optimisticActivity, ...prev])
 
-        // Update sparks in profile
-        await supabase
-            .from("user_profiles")
-            .update({ sparks: Math.max(0, sparks - reward.cost) })
-            .eq("user_id", session.user.id)
-
-        await recordTransaction(reward.title, reward.cost, "purchase")
-        return true
+        try {
+            await processCommerceAction({
+                title: reward.title,
+                cost: reward.cost,
+                type: "purchase",
+                currentSparks: previousSparks
+            })
+            return true
+        } catch (error) {
+            console.error("Purchase failed, reverting state:", error)
+            // 2. Revert on failure
+            setSparks(previousSparks)
+            setActivities(prev => prev.filter(a => a.id !== optimisticActivity.id))
+            return false
+        }
     }
 
     const spinWheel = async (): Promise<ShopReward | null> => {
@@ -96,13 +116,11 @@ export function ShopProvider({ children }: { children: ReactNode }) {
         const pool = rewards.filter(r => r.is_in_wheel)
         if (pool.length === 0) return null
 
-        // Update sparks in profile
-        await supabase
-            .from("user_profiles")
-            .update({ sparks: Math.max(0, sparks - SPIN_COST) })
-            .eq("user_id", session.user.id)
+        // 1. Optimistic UI update for Sparks
+        const previousSparks = sparks
+        setSparks(prev => Math.max(0, prev - SPIN_COST))
 
-        // Weighted random selection based on drop_chance
+        // Weighted random selection based on drop_chance (Local calculation)
         const totalWeight = pool.reduce((sum, r) => sum + r.drop_chance, 0)
         let random = Math.random() * totalWeight
 
@@ -115,8 +133,31 @@ export function ShopProvider({ children }: { children: ReactNode }) {
             }
         }
 
-        await recordTransaction(winner.title, SPIN_COST, "wheel_spin")
-        return winner
+        // Add optimistic activity
+        const optimisticActivity = {
+            id: Date.now(),
+            action: `Won ${winner.title} from wheel`,
+            timestamp: Date.now(),
+            sparks: -SPIN_COST,
+            type: "purchase" as any
+        }
+        setActivities(prev => [optimisticActivity, ...prev])
+
+        try {
+            await processCommerceAction({
+                title: winner.title,
+                cost: SPIN_COST,
+                type: "wheel_spin",
+                currentSparks: previousSparks
+            })
+            return winner
+        } catch (error) {
+            console.error("Spin failed, reverting state:", error)
+            // 2. Revert on failure
+            setSparks(previousSparks)
+            setActivities(prev => prev.filter(a => a.id !== optimisticActivity.id))
+            return null
+        }
     }
 
     const addReward = async (rewardData: Omit<ShopReward, "id">) => {

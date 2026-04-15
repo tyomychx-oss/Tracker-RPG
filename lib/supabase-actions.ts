@@ -9,9 +9,17 @@ const supabase = createClient()
  */
 export async function updateProfile(updates: Partial<UserProfile>) {
   const { data: { session } } = await supabase.auth.getSession()
-  if (!session) return null
+  const userId = session?.user?.id
+  
+  if (!userId) {
+    throw new Error("User ID is missing")
+  }
 
-  const dbPayload: any = { ...updates }
+  const dbPayload: any = {}
+  if (updates.nickname !== undefined) dbPayload.nickname = updates.nickname
+  if (updates.quests !== undefined) dbPayload.quests = updates.quests
+  if (updates.activities !== undefined) dbPayload.activities = updates.activities
+  if (updates.sparks !== undefined) dbPayload.sparks = updates.sparks
   if (updates.totalXP !== undefined) dbPayload.total_xp = updates.totalXP
   if (updates.currentLevel !== undefined) dbPayload.current_level = updates.currentLevel
   if (updates.maxXP !== undefined) dbPayload.max_xp = updates.maxXP
@@ -21,17 +29,19 @@ export async function updateProfile(updates: Partial<UserProfile>) {
   if (updates.taskSnapshots !== undefined) dbPayload.task_snapshots = updates.taskSnapshots
   if (updates.archivedAreas !== undefined) dbPayload.archived_areas = updates.archivedAreas
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("user_profiles")
     .update(dbPayload)
-    .eq("user_id", session.user.id)
+    .eq("user_id", userId)
+    .select()
+    .single()
 
   if (error) {
     console.error("Failed to update profile:", error)
-    throw error
+    throw new Error(error.message)
   }
   
-  return updates
+  return data
 }
 
 /**

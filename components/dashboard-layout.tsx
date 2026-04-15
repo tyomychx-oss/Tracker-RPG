@@ -136,7 +136,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
       <div className="p-6 border-b border-sidebar-border">
-        <h1 className="text-xl font-bold text-primary font-mono">RPG Life Tracker</h1>
+        <h1 className="text-xl font-bold text-primary font-mono">QuestLife</h1>
         <p className="text-xs text-muted-foreground mt-1">TRACKER v1.0</p>
       </div>
       <nav className="flex-1 p-4 space-y-2">
@@ -205,6 +205,20 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       </div>
     </div>
   )
+
+  const isAuthPage = pathname.startsWith("/auth")
+
+  if (isAuthPage) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center relative p-4">
+        <div className="absolute top-0 left-0 p-6">
+          <h1 className="text-xl font-bold text-primary font-mono">QuestLife</h1>
+          <p className="text-xs text-muted-foreground mt-1">TRACKER v1.0</p>
+        </div>
+        {children}
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-background flex">

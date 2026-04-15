@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
+import { createClient } from "@/utils/supabase/client"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { useNickname, useUIColor, useXP, useAreaXP, useSkills, useRecentActivity, useQuests, useSparks } from "@/components/providers"
 import { resetAllUserProgress } from "@/lib/supabase-actions"
@@ -43,12 +44,32 @@ export function SettingsPage() {
   const [addXPValue, setAddXPValue] = useState("")
   const [removeXPValue, setRemoveXPValue] = useState("")
 
-  const handleSaveNickname = () => {
-    setNickname(tempNickname)
-    setShowNicknameSaved(true)
-    setTimeout(() => {
-      setShowNicknameSaved(false)
-    }, 2000)
+  const handleSaveNickname = async () => {
+    const supabase = createClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    
+    if (!session) {
+      toast.error("You must be logged in to change nickname")
+      return
+    }
+
+    try {
+      const { error } = await supabase
+        .from("user_profiles")
+        .update({ nickname: tempNickname })
+        .eq("user_id", session.user.id)
+
+      if (error) throw error
+
+      setNickname(tempNickname)
+      setShowNicknameSaved(true)
+      setTimeout(() => {
+        setShowNicknameSaved(false)
+      }, 2000)
+    } catch (error) {
+      console.error("Save nickname failed:", error)
+      toast.error("Failed to save nickname")
+    }
   }
 
   const handleColorSelect = (color: string) => {

@@ -3,7 +3,7 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
-import { Swords, BarChart3, Dices, ShoppingBag, UserCheck, Zap } from "lucide-react"
+import { Swords, BarChart3, Dices, ShoppingBag, UserCheck, Zap, Target } from "lucide-react"
 
 export function SystemGuide({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   return (
@@ -14,125 +14,144 @@ export function SystemGuide({ open, onOpenChange }: { open: boolean; onOpenChang
             <Zap className="h-8 w-8 text-primary fill-primary" />
             SYSTEM MANUAL
           </DialogTitle>
-          <p className="text-muted-foreground text-sm uppercase tracking-widest font-bold">Protocol v2.4 | Hero Guidelines</p>
+          <p className="text-muted-foreground text-sm uppercase tracking-widest font-bold">QuestLife Protocol | Welcome, Hero</p>
         </DialogHeader>
 
         <ScrollArea className="flex-1 p-6 pt-2 h-full">
           <Accordion type="single" collapsible className="space-y-4 pb-8">
-            {/* 1. Quest Protocols */}
-            <AccordionItem value="protocols" className="border-none">
+            {/* 1. Quest Framework */}
+            <AccordionItem value="framework" className="border-none">
               <AccordionTrigger className="flex items-center gap-3 text-xl font-bold p-4 bg-muted/30 rounded-xl hover:bg-muted/50 transition-all hover:no-underline [&[data-state=open]]:bg-primary/10">
                 <div className="flex items-center gap-3 flex-1">
                   <Swords className="h-6 w-6 text-primary" />
-                  <span>1. Quest Protocols</span>
+                  <span>1. Quest Framework</span>
                 </div>
               </AccordionTrigger>
-              <AccordionContent className="pt-4 px-2 space-y-4">
-                <p className="text-sm leading-relaxed">
-                  <span className="font-bold text-foreground">The Mini-Quest Rule:</span> Every grand goal is just a series of <span className="font-bold text-primary">15–30 minute actions</span>. Break tasks down to keep momentum high and friction low.
+              <AccordionContent className="pt-4 px-2 space-y-4 text-muted-foreground">
+                <p className="text-sm leading-relaxed text-foreground">
+                  The efficiency of your journey depends on how you categorize your efforts. We use a four-tier classification system:
                 </p>
-                <div className="bg-muted/30 p-4 rounded-xl space-y-3 border border-border/50">
-                  <p className="text-xs font-bold uppercase tracking-tighter text-muted-foreground">Rarity Tiers</p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-slate-400" />
-                      <span><span className="font-bold">Common (White):</span> Daily routine & small tasks.</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-blue-500" />
-                      <span><span className="font-bold">Rare (Blue):</span> Significant progress or focused work.</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-purple-500" />
-                      <span><span className="font-bold">Epic (Purple):</span> High-impact milestones.</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-orange-500" />
-                      <span><span className="font-bold">Legendary (Gold):</span> Life-changing achievements.</span>
-                    </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="p-3 rounded-lg border border-border/50 bg-background/50">
+                    <p className="text-sm font-bold text-foreground">🟢 Fast (30s – 3m)</p>
+                    <p className="text-xs">Quick administrative tasks or small errands.</p>
+                  </div>
+                  <div className="p-3 rounded-lg border border-border/50 bg-background/50">
+                    <p className="text-sm font-bold text-foreground">🔵 Short (3m – 10m)</p>
+                    <p className="text-xs">Single-step tasks requiring light focus.</p>
+                  </div>
+                  <div className="p-3 rounded-lg border border-border/50 bg-background/50">
+                    <p className="text-sm font-bold text-foreground">🟣 Deep (10m – 1h)</p>
+                    <p className="text-xs">Focused work blocks requiring concentration.</p>
+                  </div>
+                  <div className="p-3 rounded-lg border border-border/50 bg-background/50">
+                    <p className="text-sm font-bold text-foreground">🔴 Hard (1h+)</p>
+                    <p className="text-xs">Complex projects or high-friction activities.</p>
                   </div>
                 </div>
-                <p className="text-sm italic text-muted-foreground">
-                  <span className="font-bold text-foreground not-italic">Difficulty Scaling:</span> Higher rarity increases both the XP and Gold rewards but demands more cognitive energy.
-                </p>
-              </AccordionContent>
-            </AccordionItem>
-
-            {/* 2. Economy & XP */}
-            <AccordionItem value="economy" className="border-none">
-              <AccordionTrigger className="flex items-center gap-3 text-xl font-bold p-4 bg-muted/30 rounded-xl hover:bg-muted/50 transition-all hover:no-underline [&[data-state=open]]:bg-primary/10">
-                <div className="flex items-center gap-3 flex-1">
-                  <BarChart3 className="h-6 w-6 text-primary" />
-                  <span>2. Economy & XP</span>
-                </div>
-              </AccordionTrigger>
-              <AccordionContent className="pt-4 px-2 space-y-4">
-                <div className="grid gap-4">
-                  <div className="space-y-1">
-                    <p className="text-sm"><span className="font-bold text-foreground">Experience (XP):</span> Earned by completing quests. Accumulate XP to level up your character and unlock new shop tiers.</p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-sm"><span className="font-bold text-foreground">Gold ($):</span> Your primary currency. Earned based on quest rarity and priority. Use it in the Gacha Forge or the Item Shop.</p>
-                  </div>
-                  <div className="bg-primary/5 p-4 rounded-xl border border-primary/10">
-                    <p className="text-sm">
-                      <span className="font-bold text-primary">Priority Multipliers:</span> High-priority tasks (High/Urgent) act as <span className="font-bold underline decoration-2 underline-offset-4">multipliers</span> for your rewards. Focus on what moves the needle.
-                    </p>
-                  </div>
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-
-            {/* 3. The Gacha Forge */}
-            <AccordionItem value="gacha" className="border-none">
-              <AccordionTrigger className="flex items-center gap-3 text-xl font-bold p-4 bg-muted/30 rounded-xl hover:bg-muted/50 transition-all hover:no-underline [&[data-state=open]]:bg-primary/10">
-                <div className="flex items-center gap-3 flex-1">
-                  <Dices className="h-6 w-6 text-primary" />
-                  <span>3. The Gacha Forge</span>
-                </div>
-              </AccordionTrigger>
-              <AccordionContent className="pt-4 px-2 space-y-4">
-                <p className="text-sm"><span className="font-bold text-foreground">Luck Wheel:</span> A probability-based reward system.</p>
-                <p className="text-sm"><span className="font-bold text-foreground">Fair Odds:</span> The visual area of each segment represents its actual drop chance. A <span className="font-bold text-primary">10% chance</span> takes exactly 10% of the wheel&apos;s surface.</p>
-                <div className="p-4 rounded-xl bg-slate-900 border border-slate-800">
-                  <p className="text-sm text-slate-300">
-                    <span className="font-bold text-white">The &quot;Empty&quot; Zone:</span> If the total odds of active rewards are under 100%, the remaining space is the <span className="text-slate-500 font-bold">Empty</span> sector. No win, but a valuable lesson in probability.
+                <div className="p-4 rounded-xl bg-primary/5 border border-primary/10 flex items-start gap-3">
+                  <Zap className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+                  <p className="text-sm italic">
+                    <span className="font-bold text-primary not-italic">Strategy Tip:</span> Use <span className="font-bold text-foreground">Subtasks</span> to break down Hard items into manageable components to maintain momentum.
                   </p>
                 </div>
               </AccordionContent>
             </AccordionItem>
 
-            {/* 4. Inventory & Shop */}
-            <AccordionItem value="shop" className="border-none">
+            {/* 2. Activity Categories */}
+            <AccordionItem value="categories" className="border-none">
               <AccordionTrigger className="flex items-center gap-3 text-xl font-bold p-4 bg-muted/30 rounded-xl hover:bg-muted/50 transition-all hover:no-underline [&[data-state=open]]:bg-primary/10">
                 <div className="flex items-center gap-3 flex-1">
-                  <ShoppingBag className="h-6 w-6 text-primary" />
-                  <span>4. Inventory & Shop</span>
+                  <Target className="h-6 w-6 text-primary" />
+                  <span>2. Activity Categories</span>
                 </div>
               </AccordionTrigger>
               <AccordionContent className="pt-4 px-2 space-y-4">
-                <div className="grid gap-4">
-                  <div className="space-y-1">
-                    <p className="text-sm"><span className="font-bold text-foreground">Consumables:</span> Buy items to boost your productivity. Some items increase XP gain for a duration, while others protect your streak.</p>
+                <div className="space-y-4">
+                  <div className="flex gap-3">
+                    <div className="w-1 bg-sky-500 rounded-full shrink-0" />
+                    <div>
+                      <p className="text-sm font-bold text-foreground italic">Tasks</p>
+                      <p className="text-xs text-muted-foreground">Standard one-off actions. Once completed, they are moved to your archive and rewards are issued immediately.</p>
+                    </div>
                   </div>
-                  <div className="space-y-1">
-                    <p className="text-sm"><span className="font-bold text-foreground">Item Storage:</span> All won or purchased items are stored in your Inventory. Activate them only when you are ready for a sprint.</p>
+                  <div className="flex gap-3">
+                    <div className="w-1 bg-amber-500 rounded-full shrink-0" />
+                    <div>
+                      <p className="text-sm font-bold text-foreground italic">Dailies</p>
+                      <p className="text-xs text-muted-foreground">Recurring rituals and routines. You can customize the <span className="font-bold">reset time</span> and frequency (e.g., three times per day, or every two days).</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-3">
+                    <div className="w-1 bg-rose-500 rounded-full shrink-0" />
+                    <div>
+                      <p className="text-sm font-bold text-foreground italic">Habits</p>
+                      <p className="text-xs text-muted-foreground">Long-term discipline tracking (e.g., Gym 3x/week). Monitor your <span className="font-bold">Streaks</span> and receive large XP payouts at the end of each successful week.</p>
+                    </div>
                   </div>
                 </div>
               </AccordionContent>
             </AccordionItem>
 
-            {/* 5. Character & Sync */}
+            {/* 3. Sparks Economy */}
+            <AccordionItem value="economy" className="border-none">
+              <AccordionTrigger className="flex items-center gap-3 text-xl font-bold p-4 bg-muted/30 rounded-xl hover:bg-muted/50 transition-all hover:no-underline [&[data-state=open]]:bg-primary/10">
+                <div className="flex items-center gap-3 flex-1">
+                  <Zap className="h-6 w-6 text-primary" />
+                  <span>3. Sparks Economy</span>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="pt-4 px-2 space-y-4">
+                <div className="space-y-3">
+                  <p className="text-sm text-foreground">
+                    <span className="font-bold">Sparks</span> are the universal energy currency of QuestLife.
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Every completed quest generates Sparks. The volume of energy received is directly proportional to the <span className="font-bold text-foreground">Effort Class</span> (Fast to Hard) you assigned to the task.
+                  </p>
+                  <div className="bg-primary/5 p-4 rounded-xl border border-primary/10 text-center">
+                    <p className="text-sm font-bold text-primary">Effort = Reward</p>
+                    <p className="text-xs text-muted-foreground">Higher friction items yield significantly more Sparks for use in the Forge.</p>
+                  </div>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+
+            {/* 4. Gacha & Market */}
+            <AccordionItem value="gacha" className="border-none">
+              <AccordionTrigger className="flex items-center gap-3 text-xl font-bold p-4 bg-muted/30 rounded-xl hover:bg-muted/50 transition-all hover:no-underline [&[data-state=open]]:bg-primary/10">
+                <div className="flex items-center gap-3 flex-1">
+                  <ShoppingBag className="h-6 w-6 text-primary" />
+                  <span>4. Gacha & Market</span>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="pt-4 px-2 space-y-4">
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-sm font-bold text-foreground">The Gacha Forge</p>
+                    <p className="text-xs text-muted-foreground mt-1">Spin the wheel for <span className="font-bold text-primary">35 Sparks</span>. The visual area of each slice perfectly represents your actual chance of winning the reward.</p>
+                  </div>
+                  <div className="p-4 rounded-xl bg-orange-500/5 border border-orange-500/10">
+                    <p className="text-sm font-bold text-orange-600">The Marketplace</p>
+                    <p className="text-xs text-muted-foreground mt-1">Visit the Market to define your own rewards. Use your Sparks to &quot;buy&quot; the right to enjoy IRL activities like gaming, scrolling, or snacks. Productivity pays for your relaxation.</p>
+                  </div>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+
+            {/* 5. Data & Sync */}
             <AccordionItem value="sync" className="border-none">
               <AccordionTrigger className="flex items-center gap-3 text-xl font-bold p-4 bg-muted/30 rounded-xl hover:bg-muted/50 transition-all hover:no-underline [&[data-state=open]]:bg-primary/10">
                 <div className="flex items-center gap-3 flex-1">
                   <UserCheck className="h-6 w-6 text-primary" />
-                  <span>5. Character & Sync</span>
+                  <span>5. Data & Sync</span>
                 </div>
               </AccordionTrigger>
               <AccordionContent className="pt-4 px-2 space-y-4">
-                <p className="text-sm"><span className="font-bold text-foreground">Cloud Identity:</span> Your progress is synced in real-time with Supabase. Whether on mobile or desktop, your journey remains intact.</p>
-                <p className="text-sm"><span className="font-bold text-foreground">Route Guarding:</span> Only authenticated Heroes can access the System. Your data is protected by your personal account.</p>
+                <div className="space-y-3">
+                  <p className="text-sm text-foreground"><span className="font-bold">Real-time Cloud Sync:</span> Your status is securely persisted via Supabase. Switch between devices without losing your progress or streaks.</p>
+                  <p className="text-sm text-foreground"><span className="font-bold">Auth Guard protection:</span> The route guarding system ensures your personal data and inventory are only accessible by your authenticated Hero account.</p>
+                </div>
               </AccordionContent>
             </AccordionItem>
           </Accordion>

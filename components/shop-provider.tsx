@@ -118,7 +118,7 @@ export function ShopProvider({ children }: { children: ReactNode }) {
         return true
     }
 
-    const spinWheel = async (): Promise<ShopReward | null> => {
+    const spinWheel = async (): Promise<ShopReward | any | null> => {
         const SPIN_COST = 35
         if (sparks < SPIN_COST) return null
 
@@ -134,11 +134,10 @@ export function ShopProvider({ children }: { children: ReactNode }) {
             .update({ sparks: Math.max(0, sparks - SPIN_COST) })
             .eq("user_id", session.user.id)
 
-        // Weighted random selection based on drop_chance
-        const totalWeight = pool.reduce((sum, r) => sum + r.drop_chance, 0)
-        let random = Math.random() * totalWeight
+        // Weighted random selection based on drop_chance (out of 100%)
+        let random = Math.random() * 100
 
-        let winner = pool[0]
+        let winner: any = { id: 'empty', title: 'Empty', icon: null }
         for (const reward of pool) {
             random -= reward.drop_chance
             if (random <= 0) {

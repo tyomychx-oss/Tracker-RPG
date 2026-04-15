@@ -27,6 +27,26 @@ export function ShopGacha() {
     const SPIN_DURATION = 4000
     const SPIN_COST = 35
 
+    const totalDropChance = pool.reduce((sum, item) => sum + (item.drop_chance || 0), 0)
+    
+    // Build visual segments
+    const segments: any[] = pool.map(item => ({
+        ...item,
+        angleSize: (item.drop_chance / 100) * 360,
+        isGap: false
+    }))
+
+    if (totalDropChance < 100) {
+        segments.push({
+            id: 'empty',
+            title: 'Empty',
+            icon: '',
+            angleSize: ((100 - totalDropChance) / 100) * 360,
+            isGap: true,
+            drop_chance: 100 - totalDropChance
+        })
+    }
+
     const handleSpin = async () => {
         if (pool.length === 0 || sparks < SPIN_COST || isSpinning) return
 
@@ -42,13 +62,15 @@ export function ShopGacha() {
         }
 
         // 2. Calculate the exact rotation needed
-        const winnerIndex = pool.findIndex(r => r.id === result.id)
-        const anglePerSlice = 360 / pool.length
+        const winnerIndex = segments.findIndex(r => r.id === result.id)
         
-        // The slice is positioned clockwise. 
-        // Slice 0 starts at 0deg. 
-        // Slice i center is at (i * anglePerSlice) + (anglePerSlice / 2)
-        const winnerCenter = (winnerIndex * anglePerSlice) + (anglePerSlice / 2)
+        let accumulatedAngle = 0;
+        for (let i = 0; i < winnerIndex; i++) {
+            accumulatedAngle += segments[i].angleSize;
+        }
+        
+        // Center of the winner slice
+        const winnerCenter = accumulatedAngle + (segments[winnerIndex].angleSize / 2)
         
         // To center the winner at the TOP (0deg), we need to rotate the wheel by -winnerCenter.
         // We add current rotation to keep it spinning forward.
@@ -94,38 +116,49 @@ export function ShopGacha() {
                             style={{ 
                                 transform: `rotate(${rotation}deg)`,
                                 transition: transitionStyle,
-                                background: `conic-gradient(${pool.map((_, i) => {
-                                    const angle = 360 / pool.length;
-                                    const colors = [
-                                        "rgba(222, 101, 80, 0.8)",
-                                        "rgba(30, 41, 59, 0.8)",
-                                        "rgba(251, 146, 60, 0.8)",
-                                        "rgba(15, 23, 42, 0.8)"
-                                    ];
-                                    const c = colors[i % colors.length];
-                                    return `${c} ${i * angle}deg ${(i + 1) * angle}deg`;
-                                }).join(", ")})`
+                                background: `conic-gradient(${(() => {
+                                    let currentAngle = 0;
+                                    return segments.map((seg, i) => {
+                                        const colors = [
+                                            "rgba(222, 101, 80, 0.8)",
+                                            "rgba(30, 41, 59, 0.8)",
+                                            "rgba(251, 146, 60, 0.8)",
+                                            "rgba(15, 23, 42, 0.8)"
+                                        ];
+                                        const c = seg.isGap ? "rgba(15, 23, 42, 0.95)" : colors[i % colors.length];
+                                        const startAngle = currentAngle;
+                                        const endAngle = currentAngle + seg.angleSize;
+                                        currentAngle = endAngle;
+                                        return `${c} ${startAngle}deg ${endAngle}deg`;
+                                    }).join(", ");
+                                })()})`
                             }}
                         >
-                            {pool.map((item, i) => {
-                                const angle = 360 / pool.length
-                                const midAngle = (i * angle) + (angle / 2)
-                                
-                                return (
-                                    <div 
-                                        key={item.id}
-                                        className="absolute inset-0"
-                                        style={{ transform: `rotate(${midAngle}deg)` }}
-                                    >
-                                        <div className="absolute top-0 left-1/2 -translate-x-1/2 mt-8 md:mt-12 flex flex-col items-center gap-1">
-                                            <span className="text-2xl md:text-3xl filter drop-shadow-md">{item.icon || "🎁"}</span>
-                                            <span className="text-[10px] md:text-xs font-bold text-white max-w-[60px] line-clamp-1 leading-tight uppercase tracking-tighter opacity-80">
-                                                {item.title}
-                                            </span>
+                            {(() => {
+                                let currentAccumulatedAngle = 0;
+                                return segments.map((item, i) => {
+                                    const midAngle = currentAccumulatedAngle + (item.angleSize / 2);
+                                    currentAccumulatedAngle += item.angleSize;
+                                    
+                                    if (item.isGap) return null;
+                                    if (item.drop_chance <= 3) return null;
+
+                                    return (
+                                        <div 
+                                            key={item.id}
+                                            className="absolute inset-0 pointer-events-none"
+                                            style={{ transform: `rotate(${midAngle}deg)` }}
+                                        >
+                                            <div className="absolute top-0 left-1/2 -translate-x-1/2 mt-8 md:mt-12 flex flex-col items-center gap-1">
+                                                <span className="text-2xl md:text-3xl filter drop-shadow-md">{item.icon || "🎁"}</span>
+                                                <span className="text-[10px] md:text-xs font-bold text-white max-w-[60px] line-clamp-1 leading-tight uppercase tracking-tighter opacity-80">
+                                                    {item.title}
+                                                </span>
+                                            </div>
                                         </div>
-                                    </div>
-                                )
-                            })}
+                                    )
+                                })
+                            })()}
                         </div>
 
                         {/* Center Cap */}
@@ -161,26 +194,32 @@ export function ShopGacha() {
             <Dialog open={isOpen} onOpenChange={setIsOpen}>
                 <DialogContent className="sm:max-w-md border-2 border-orange-500/50 bg-black/95 text-white">
                     <DialogHeader>
-                        <DialogTitle className="text-center text-3xl font-bold text-orange-500">
-                            REWARD UNLOCKED!
+                        <DialogTitle className={`text-center text-3xl font-bold ${winner?.id === 'empty' ? 'text-slate-400' : 'text-orange-500'}`}>
+                            {winner?.id === 'empty' ? 'NO LUCK THIS TIME' : 'REWARD UNLOCKED!'}
                         </DialogTitle>
                         <DialogDescription className="sr-only">Win result</DialogDescription>
                     </DialogHeader>
                     <div className="flex flex-col items-center py-8 space-y-6">
-                        <div className="h-28 w-28 rounded-full bg-orange-500/20 flex items-center justify-center animate-bounce border-2 border-orange-500/30">
-                            <Trophy className="h-16 w-16 text-orange-500" />
+                        <div className={`h-28 w-28 rounded-full flex items-center justify-center ${winner?.id === 'empty' ? 'bg-slate-800 border-2 border-slate-700' : 'bg-orange-500/20 animate-bounce border-2 border-orange-500/30'}`}>
+                            {winner?.id === 'empty' ? (
+                                <span className="text-5xl">💨</span>
+                            ) : (
+                                <Trophy className="h-16 w-16 text-orange-500" />
+                            )}
                         </div>
                         <div className="text-center space-y-2">
-                            <p className="text-muted-foreground text-sm uppercase tracking-widest">Fortune favors you with</p>
-                            <h3 className="text-3xl font-black max-w-[300px] leading-tight">
+                            <p className="text-muted-foreground text-sm uppercase tracking-widest">
+                                {winner?.id === 'empty' ? 'The wheel landed on' : 'Fortune favors you with'}
+                            </p>
+                            <h3 className="text-3xl font-black max-w-[300px] leading-tight text-white">
                                 {winner?.title}
                             </h3>
                         </div>
                         <Button 
                             onClick={() => setIsOpen(false)} 
-                            className="w-full max-w-xs bg-orange-600 hover:bg-orange-700 font-bold h-12 text-lg"
+                            className={`w-full max-w-xs font-bold h-12 text-lg border-0 ${winner?.id === 'empty' ? 'bg-slate-700 hover:bg-slate-600 text-white' : 'bg-orange-600 hover:bg-orange-700'}`}
                         >
-                            ADD TO INVENTORY
+                            {winner?.id === 'empty' ? 'TRY AGAIN' : 'ADD TO INVENTORY'}
                         </Button>
                     </div>
                 </DialogContent>

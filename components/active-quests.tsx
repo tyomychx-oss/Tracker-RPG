@@ -77,7 +77,7 @@ export function ActiveQuests() {
             newSkillXPs[skillName] = Math.max(0, (newSkillXPs[skillName] || 0) - xpAmount)
         }
         const newSparks = Math.max(0, (sparks || 0) - reward)
-        const newActivities = [{ id: Date.now(), action: `Undo Progress: ${questObj.title}`, timestamp: Date.now(), xp: -xpAmount, type: category }, ...activities]
+        const newActivities = [{ id: Date.now(), action: `Undo Progress: ${questObj.title}`, timestamp: Date.now(), xp: -xpAmount, type: category, sparks: -reward }, ...activities]
 
         await syncQuestCompletion({
             category,
@@ -191,7 +191,7 @@ export function ActiveQuests() {
                 }
             }
 
-            if (!isIntermediate) {
+            if (!isIntermediate || isHabit) {
                 newSnapshots[questId] = {
                     questId,
                     previousLevel: currentLevel,
@@ -202,7 +202,8 @@ export function ActiveQuests() {
                 newXpState = addXPToState(totalXP, currentLevel, targetXpAmount)
                 sparkChange = targetSparkChange
                 newActivities = [{ id: Date.now(), action: `Completed: ${questTitle}`, timestamp: Date.now(), xp: targetXpAmount, type: category, sparks: targetSparkChange }, ...newActivities]
-            } else {
+            }
+            if (isIntermediate && isHabit) {
                 toast.success(`Progress saved! ${cProgress}/${wTarget} to Weekly Prize 🔥`)
             }
         }

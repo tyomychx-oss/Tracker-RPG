@@ -21,6 +21,7 @@ interface EmberQuestCardProps {
     isPinned: boolean
     draggedQuestId: number | null
     onToggleQuest: () => void
+    onUndoQuest?: () => void
     onEditQuest: () => void
     onDeleteQuest: () => void
     onArchiveQuest: () => void
@@ -41,6 +42,7 @@ export function EmberQuestCard({
     isPinned,
     draggedQuestId,
     onToggleQuest,
+    onUndoQuest,
     onEditQuest,
     onDeleteQuest,
     onArchiveQuest,
@@ -152,6 +154,8 @@ export function EmberQuestCard({
                                     e.stopPropagation();
                                     if (quest.completed) {
                                         onToggleQuest();
+                                    } else if (onUndoQuest) {
+                                        onUndoQuest();
                                     } else {
                                         onUpdateQuest({ currentWeeklyProgress: Math.max(0, cProgress - 1) });
                                     }

@@ -65,14 +65,40 @@ export function ActiveQuests() {
         const qIdx = newQuests[category].findIndex((q: any) => q.id === questId);
         if (qIdx !== -1 && newQuests[category][qIdx].currentWeeklyProgress > 0) {
             newQuests[category][qIdx].currentWeeklyProgress -= 1;
+        } else {
+            return;
         }
 
-        const { error } = await updateQuests(newQuests);
-        if (!error) {
-            setQuests(newQuests);
-        } else {
-            toast.error("Failed to undo progress");
+        const reward = (questObj as any)?.reward || (questObj?.rating === "fast" ? 5 : questObj?.rating === "short" ? 10 : questObj?.rating === "deep" ? 25 : questObj?.rating === "hard" ? 50 : 0)
+
+        const newXpState = removeXPFromState(totalXP, currentLevel, xpAmount)
+        const newSkillXPs = { ...areaXPs }
+        if (skillName && skillName !== "none") {
+            newSkillXPs[skillName] = Math.max(0, (newSkillXPs[skillName] || 0) - xpAmount)
         }
+        const newSparks = Math.max(0, (sparks || 0) - reward)
+        const newActivities = [{ id: Date.now(), action: `Undo Progress: ${questObj.title}`, timestamp: Date.now(), xp: -xpAmount, type: category }, ...activities]
+
+        await syncQuestCompletion({
+            category,
+            questId,
+            isCompleted: false,
+            xpChange: -xpAmount,
+            sparkChange: -reward,
+            skillName,
+            newQuestData: newQuests,
+            newActivities: newActivities.slice(0, 100),
+            newSnapshots: taskSnapshots,
+            xpState: newXpState
+        })
+
+        // UPDATE STATE
+        setQuests(newQuests)
+        setXPState(newXpState)
+        setAreaXPs(newSkillXPs)
+        setActivities(newActivities as any)
+        if (typeof setSparks === 'function') setSparks(newSparks)
+        setLastUpdated(Date.now())
     };
 
     // 1. QUEST COMPLETION / TOGGLE
@@ -102,20 +128,8 @@ export function ActiveQuests() {
         let targetSparkChange = reward
 
         if (isHabit) {
-            const wTarget = questObj.weeklyTarget || 7
-            if (!isCompleted) {
-                const newProgress = (questObj.currentWeeklyProgress || 0) + 1
-                if (newProgress < wTarget) {
-                    targetXpAmount = 0
-                    targetSparkChange = 0
-                } else {
-                    targetXpAmount = xpAmount * wTarget
-                    targetSparkChange = reward * wTarget
-                }
-            } else {
-                targetXpAmount = xpAmount * wTarget
-                targetSparkChange = reward * wTarget
-            }
+            targetXpAmount = xpAmount
+            targetSparkChange = reward
         }
 
         if (isCompleted) {

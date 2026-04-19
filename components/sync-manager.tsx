@@ -15,6 +15,8 @@ import {
 } from "@/components/providers"
 import { useShop } from "@/components/shop-provider"
 import { DebugPanel } from "@/components/debug-panel"
+import { updateQuests, getQuestsTable, updateQuestsTable } from "@/lib/supabase-actions"
+import { checkAndResetDailies } from "@/utils/daily-reset"
 
 interface SyncManagerProps {
   children: ReactNode
@@ -100,7 +102,46 @@ export function SyncManager({ children }: SyncManagerProps) {
         })
         setAreaXPs(profile.skill_xps || {})
         setAreaColors(profile.skill_colors || {})
-        setQuests(profile.quests || { plans: [], dailies: [], habits: [] })
+        
+        // --- QUESTS FETCH & MERGE ---
+        const profileQuests = profile.quests || { plans: [], dailies: [], habits: [] }
+        // Fetch Dailies from dedicated SQL table
+        const tableQuests = await getQuestsTable(currentUserId)
+        const sqlDailies = tableQuests.filter((q: any) => q.category === 'dailies')
+        
+        // Merge: Dailies from SQL, Plans/Habits from JSON
+        const fetchedQuests = { 
+          ...profileQuests, 
+          dailies: sqlDailies 
+        }
+        setQuests(fetchedQuests)
+
+        // 2. DAILY RESET ENGINE
+        console.log("[Daily Engine] Check started")
+        const { updatedQuests, resetCount } = checkAndResetDailies(fetchedQuests)
+        
+        if (resetCount > 0) {
+          console.log(`[Daily Engine] Reset ${resetCount} tasks based on frequency/time settings.`)
+          // Update SQL Table for Dailies
+          const dailiesToSync = updatedQuests.dailies.filter((q: any) => {
+            const original = fetchedQuests.dailies.find((od: any) => od.id === q.id)
+            return JSON.stringify(q) !== JSON.stringify(original)
+          })
+          if (dailiesToSync.length > 0) {
+            await updateQuestsTable(dailiesToSync)
+          }
+          setQuests(updatedQuests)
+        } else if (JSON.stringify(updatedQuests) !== JSON.stringify(fetchedQuests)) {
+          // Sync initialization (e.g. stale completions)
+          const dailiesToSync = updatedQuests.dailies.filter((q: any) => {
+            const original = fetchedQuests.dailies.find((od: any) => od.id === q.id)
+            return JSON.stringify(q) !== JSON.stringify(original)
+          })
+          if (dailiesToSync.length > 0) {
+            await updateQuestsTable(dailiesToSync)
+          }
+          setQuests(updatedQuests)
+        }
         setActivities(profile.activities || [])
         setUIColor(profile.ui_color || "#de6550")
         setTaskSnapshots(profile.task_snapshots || {})
@@ -198,6 +239,21 @@ export function SyncManager({ children }: SyncManagerProps) {
         async () => {
           const { data } = await supabase.from("transactions").select("*").eq("user_id", userIdState).order("created_at", { ascending: false }).limit(50)
           if (data) setTransactions(data)
+        }
+      )
+      // Listen to Dedicated Quests Table (Dailies)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "quests", filter: `user_id=eq.${userIdState}` },
+        async () => {
+          console.log("[Sync] Quests table update received via Realtime")
+          const tableQuests = await getQuestsTable(userIdState)
+          const sqlDailies = tableQuests.filter((q: any) => q.category === 'dailies')
+          
+          setQuests(prev => ({
+            ...prev,
+            dailies: sqlDailies
+          }))
         }
       )
 

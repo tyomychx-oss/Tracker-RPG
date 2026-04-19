@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch"
 import { Plus, Award, X, Check, Trash2, Archive } from "lucide-react"
 import { useRecentActivity, useUIColor, useQuests, useAreas } from "@/components/providers"
-import { updateProfile } from "@/lib/supabase-actions"
+import { updateProfile, updateQuestsTable } from "@/lib/supabase-actions"
 
 export function QuickAdd() {
     const [taskName, setTaskName] = useState("")
@@ -110,31 +110,67 @@ export function QuickAdd() {
             ...activities
         ]
 
-        // 1. OPTIMISTIC UPDATE (Instant UI)
-        setQuests(newQuests)
-        setActivities(newActivities as any)
-        setLastUpdated(Date.now())
-
-        try {
-            const { data, error } = await updateProfile({
-                quests: newQuests,
-                activities: newActivities.slice(0, 100)
-            })
-
-            if (!error) {
-                setQuests(newQuests)
-                setActivities(newActivities as any)
-            } else {
-                console.error("Failed to add task:", error)
+        // 1. SPLIT LOGIC: Dailies go to SQL Table, Others to JSONB
+        if (taskType === "dailies") {
+            const sqlPayload = {
+                category: 'dailies' as const,
+                title: taskName,
+                skill: taskSkill === "none" ? "" : taskSkill,
+                xp: Number(taskXP || "25"),
+                rating: taskPriority || "short",
+                frequency_count: Number(dailyCount || "1"),
+                frequency_period_days: Number(dailyPeriodDays || "1"),
+                reset_time: dailyResetTime || "00:00",
+                is_completed: false,
+                is_archived: false,
+                last_completed_at: null,
+                id: crypto.randomUUID()
             }
-            // Reset form
-            setTaskName("")
-            setTaskXP("25")
-            setShowSubtasks(false)
-            setSubtasks([])
-            sessionStorage.removeItem(DRAFT_KEY)
-        } catch (err) {
-            console.error("Failed to add task:", err)
+
+            // OPTIMISTIC UPDATE
+            const newQuests = { ...quests, dailies: [...quests.dailies, sqlPayload] }
+            setQuests(newQuests)
+            setActivities(newActivities as any)
+            setLastUpdated(Date.now())
+
+            try {
+                await updateQuestsTable([sqlPayload])
+                await updateProfile({ activities: newActivities.slice(0, 100) })
+                setTaskName("")
+                setTaskXP("25")
+                setShowSubtasks(false)
+                setSubtasks([])
+                sessionStorage.removeItem(DRAFT_KEY)
+            } catch (err) {
+                console.error("Failed to add SQL daily:", err)
+            }
+        } else {
+            // ORIGINAL JSONB LOGIC for Plans and Habits
+            const newQuests = JSON.parse(JSON.stringify(quests))
+            newQuests[taskType].push(base)
+
+            // OPTIMISTIC UPDATE
+            setQuests(newQuests)
+            setActivities(newActivities as any)
+            setLastUpdated(Date.now())
+
+            try {
+                const { error } = await updateProfile({
+                    quests: newQuests,
+                    activities: newActivities.slice(0, 100)
+                })
+
+                if (!error) {
+                    setQuests(newQuests)
+                }
+                setTaskName("")
+                setTaskXP("25")
+                setShowSubtasks(false)
+                setSubtasks([])
+                sessionStorage.removeItem(DRAFT_KEY)
+            } catch (err) {
+                console.error("Failed to add JSON task:", err)
+            }
         }
     }
 

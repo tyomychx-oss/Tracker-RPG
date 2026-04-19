@@ -40,19 +40,27 @@ export interface AreaFilterContextType {
 }
 
 export interface Quest {
-  id: number
+  id: number | string // Support both string UUIDs and legacy numbers
   title: string
   skill: string
   xp: number
   rating: string
-  completed: boolean
-  archivedAt: number | null
-  lastCompletedDate: string | null
+  completed?: boolean // Legacy
+  is_completed?: boolean // SQL
+  is_archived?: boolean // SQL
+  archivedAt?: number | null // Legacy
+  lastCompletedDate?: string | null // Legacy
+  last_completed_at?: string | null // SQL
+  category?: 'plans' | 'dailies' | 'habits' // SQL
   frequency?: number
-  frequencyCount?: number
-  frequencyPeriodDays?: number
-  resetTime?: string
-  completedCount?: number
+  frequencyCount?: number // Legacy
+  frequency_count?: number // SQL
+  frequencyPeriodDays?: number // Legacy
+  frequency_period_days?: number // SQL
+  resetTime?: string // Legacy
+  reset_time?: string // SQL
+  completedCount?: number // Legacy
+  completed_count?: number // SQL
   lastResetDate?: string | null
   periodStartAt?: number
   streak?: number
@@ -69,7 +77,7 @@ export interface Quest {
 }
 
 export interface TaskStateSnapshot {
-  questId: number
+  questId: number | string
   previousLevel: number
   previousXP: number
   previousMaxXP: number
@@ -77,8 +85,8 @@ export interface TaskStateSnapshot {
 }
 
 export interface QuestsContextType {
-  taskSnapshots: Record<number, TaskStateSnapshot>
-  setTaskSnapshots: React.Dispatch<React.SetStateAction<Record<number, TaskStateSnapshot>>>
+  taskSnapshots: Record<string | number, TaskStateSnapshot>
+  setTaskSnapshots: React.Dispatch<React.SetStateAction<Record<string | number, TaskStateSnapshot>>>
   quests: {
     plans: Quest[]
     dailies: Quest[]

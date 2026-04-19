@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Pencil, ChevronDown, ChevronUp, Trash2, Plus, X, Zap, Pin, PinOff, GripVertical, Flame, Check, RotateCcw } from "lucide-react"
 import { useXP, useAreaColors, useAreaFilter, useRecentActivity, useUIColor, useAreaXP, useQuests, useSparks, useAreas } from "@/components/providers"
 import { createClient } from "@/utils/supabase/client"
-import { syncQuestCompletion, updateQuests, updateProfile } from "@/lib/supabase-actions"
+import { syncQuestCompletion, updateQuests, updateProfile, deleteQuestTable, updateQuestsTable } from "@/lib/supabase-actions"
 import { addXPToState, removeXPFromState } from "@/lib/rpg-logic"
 import { toast } from "sonner"
 
@@ -36,7 +36,7 @@ export function ActiveQuests() {
     })
 
     const [editingQuest, setEditingQuest] = useState<{
-        id: number
+        id: number | string
         category: "plans" | "dailies" | "habits"
         title: string
         skill: string
@@ -44,15 +44,18 @@ export function ActiveQuests() {
         rating: string
         frequency?: number
         frequencyCount?: number
+        frequency_count?: number
         frequencyPeriodDays?: number
+        frequency_period_days?: number
         resetTime?: string
+        reset_time?: string
         streak?: number
         subtasks?: { id: string; title: string; completed: boolean }[]
     } | null>(null)
 
-    const [draggedQuest, setDraggedQuest] = useState<{ id: number; category: "plans" | "dailies" | "habits" } | null>(null)
+    const [draggedQuest, setDraggedQuest] = useState<{ id: number | string; category: "plans" | "dailies" | "habits" } | null>(null)
 
-    const handleUndoHabitProgress = async (category: "plans" | "dailies" | "habits", questId: number, xpAmount: number, skillName: string) => {
+    const handleUndoHabitProgress = async (category: "plans" | "dailies" | "habits", questId: number | string, xpAmount: number, skillName: string) => {
         const questObj = quests[category].find((q: any) => q.id === questId) as any;
         if (!questObj) return;
 
@@ -104,7 +107,7 @@ export function ActiveQuests() {
     // 1. QUEST COMPLETION / TOGGLE
     const handleToggleQuest = async (
         category: "plans" | "dailies" | "habits",
-        questId: number,
+        questId: number | string,
         xpAmount: number,
         isCompleted: boolean,
         questTitle: string,
@@ -151,12 +154,24 @@ export function ActiveQuests() {
 
             const qIdx = newQuests[category].findIndex((q: any) => q.id === questId)
             if (qIdx !== -1) {
-                newQuests[category][qIdx].completed = false
-                newQuests[category][qIdx].lastCompletedDate = null
-                if (isHabit) {
-                    const wTarget = newQuests[category][qIdx].weeklyTarget || 7;
-                    newQuests[category][qIdx].streak = Math.max(0, (newQuests[category][qIdx].streak || 0) - 1)
-                    newQuests[category][qIdx].currentWeeklyProgress = Math.max(0, wTarget - 1)
+                if (category === "dailies") {
+                    newQuests[category][qIdx].is_completed = false
+                    newQuests[category][qIdx].completed_count = Math.max(0, (newQuests[category][qIdx].completed_count || 0) - 1)
+                    // If we uncomplete, we usually don't clear last_completed_at 
+                    // unless we want to reset the cycle, but let's clear it 
+                    // if it was the ONLY completion. Actually, let's just 
+                    // keep it as is, or clear it if completed_count is 0.
+                    if (newQuests[category][qIdx].completed_count === 0) {
+                        newQuests[category][qIdx].last_completed_at = null
+                    }
+                } else {
+                    newQuests[category][qIdx].completed = false
+                    newQuests[category][qIdx].lastCompletedDate = null
+                    if (isHabit) {
+                        const wTarget = newQuests[category][qIdx].weeklyTarget || 7;
+                        newQuests[category][qIdx].streak = Math.max(0, (newQuests[category][qIdx].streak || 0) - 1)
+                        newQuests[category][qIdx].currentWeeklyProgress = Math.max(0, wTarget - 1)
+                    }
                 }
             }
         } else {
@@ -180,11 +195,15 @@ export function ActiveQuests() {
                         isIntermediate = true
                     }
                 } else if (category === "dailies") {
-                    const freq = questObj?.frequencyCount ?? questObj?.frequency ?? 1
-                    const count = (questObj?.completedCount || 0) + 1
-                    newQuests[category][qIdx].completed = count >= freq
-                    newQuests[category][qIdx].completedCount = count
-                    newQuests[category][qIdx].lastCompletedDate = today
+                    const freq = questObj?.frequency_count ?? questObj?.frequencyCount ?? 1
+                    const count = (questObj?.completed_count || 0) + 1
+                    const isTotalCompleted = count >= freq
+                    
+                    newQuests[category][qIdx].is_completed = isTotalCompleted
+                    newQuests[category][qIdx].completed_count = count
+                    if (isTotalCompleted) {
+                        newQuests[category][qIdx].last_completed_at = new Date().toISOString()
+                    }
                 } else {
                     newQuests[category][qIdx].completed = true
                     newQuests[category][qIdx].lastCompletedDate = today
@@ -237,7 +256,7 @@ export function ActiveQuests() {
         if (typeof setSparks === 'function') setSparks(newSparks)
     }
 
-    const handleArchiveQuest = async (category: "plans" | "dailies" | "habits", questId: number, questTitle: string) => {
+    const handleArchiveQuest = async (category: "plans" | "dailies" | "habits", questId: number | string, questTitle: string) => {
         const newQuests = JSON.parse(JSON.stringify(quests))
         const qIdx = newQuests[category].findIndex((q: any) => q.id === questId)
         if (qIdx !== -1) {
@@ -250,14 +269,16 @@ export function ActiveQuests() {
         ]
 
         try {
-            const { data, error } = await updateProfile({
-                quests: newQuests,
-                activities: newActivities.slice(0, 100)
-            })
-
-            if (error) {
-                toast.error(typeof error === 'string' ? error : "Failed to archive")
-                return
+            if (category === "dailies") {
+                newQuests[category][qIdx].is_archived = true
+                await updateQuestsTable([newQuests[category][qIdx]])
+                await updateProfile({ activities: newActivities.slice(0, 100) })
+            } else {
+                const { data, error } = await updateProfile({
+                    quests: newQuests,
+                    activities: newActivities.slice(0, 100)
+                })
+                if (error) throw error
             }
 
             setQuests(newQuests)
@@ -267,7 +288,7 @@ export function ActiveQuests() {
         }
     }
 
-    const handleUnarchiveQuest = async (category: "plans" | "dailies" | "habits", questId: number, xpAmount: number, skillName: string) => {
+    const handleUnarchiveQuest = async (category: "plans" | "dailies" | "habits", questId: number | string, xpAmount: number, skillName: string) => {
         const newQuests = JSON.parse(JSON.stringify(quests))
         const qIdx = newQuests[category].findIndex((q: any) => q.id === questId)
         
@@ -282,6 +303,9 @@ export function ActiveQuests() {
             if (isHabit) {
                 // Keep the completion state, weekly target progress, and prevent XP rollback for habits
                 shouldDeductXP = false;
+            } else if (category === "dailies") {
+                questObj.is_archived = false;
+                shouldDeductXP = false; // Dailies don't deduct XP on unarchive as they are repeatable
             } else {
                 questObj.completed = false;
             }
@@ -298,17 +322,23 @@ export function ActiveQuests() {
         }
 
         try {
-            const { data, error } = await updateProfile({
-                quests: newQuests,
-                totalXP: newXp.totalXP,
-                currentLevel: newXp.currentLevel,
-                maxXP: newXp.maxXP,
-                skillXPs: newSkillXPs
-            })
-
-            if (error) {
-                toast.error(typeof error === 'string' ? error : "Failed to unarchive")
-                return
+            if (category === "dailies") {
+                await updateQuestsTable([newQuests[category][qIdx]])
+                await updateProfile({
+                    totalXP: newXp.totalXP,
+                    currentLevel: newXp.currentLevel,
+                    maxXP: newXp.maxXP,
+                    skillXPs: newSkillXPs
+                })
+            } else {
+                const { data, error } = await updateProfile({
+                    quests: newQuests,
+                    totalXP: newXp.totalXP,
+                    currentLevel: newXp.currentLevel,
+                    maxXP: newXp.maxXP,
+                    skillXPs: newSkillXPs
+                })
+                if (error) throw error
             }
 
             setQuests(newQuests)
@@ -321,7 +351,7 @@ export function ActiveQuests() {
         }
     }
 
-    const handleDeleteQuest = async (category: "plans" | "dailies" | "habits", questId: number, questTitle: string) => {
+    const handleDeleteQuest = async (category: "plans" | "dailies" | "habits", questId: number | string, questTitle: string) => {
         const newQuests = JSON.parse(JSON.stringify(quests))
         newQuests[category] = newQuests[category].filter((q: any) => q.id !== questId)
 
@@ -331,14 +361,15 @@ export function ActiveQuests() {
         ]
 
         try {
-            const { data, error } = await updateProfile({
-                quests: newQuests,
-                activities: newActivities.slice(0, 100)
-            })
-
-            if (error) {
-                toast.error(typeof error === 'string' ? error : "Failed to delete")
-                return
+            if (category === "dailies") {
+                await deleteQuestTable(questId)
+                await updateProfile({ activities: newActivities.slice(0, 100) })
+            } else {
+                const { error } = await updateProfile({
+                    quests: newQuests,
+                    activities: newActivities.slice(0, 100)
+                })
+                if (error) throw error
             }
 
             setQuests(newQuests)
@@ -361,20 +392,31 @@ export function ActiveQuests() {
                 skill: editingQuest.skill,
                 xp: editingQuest.xp,
                 rating: editingQuest.rating,
+                // Handle both Legacy and SQL fields
                 frequencyCount: editingQuest.frequencyCount,
+                frequency_count: editingQuest.frequency_count || editingQuest.frequencyCount,
                 frequencyPeriodDays: editingQuest.frequencyPeriodDays,
+                frequency_period_days: editingQuest.frequency_period_days || editingQuest.frequencyPeriodDays,
                 resetTime: editingQuest.resetTime,
+                reset_time: editingQuest.reset_time || editingQuest.resetTime,
                 subtasks: editingQuest.subtasks ? editingQuest.subtasks.filter(s => s.title.trim() !== "") : [],
             }
         }
 
-        const { error } = await updateQuests(newQuests)
-        if (!error) setQuests(newQuests)
-        else toast.error("Failed to save quest changes")
-        setEditingQuest(null)
+        try {
+            if (editingQuest.category === "dailies") {
+                await updateQuestsTable([newQuests[editingQuest.category][qIdx]])
+            } else {
+                await updateQuests(newQuests)
+            }
+            setQuests(newQuests)
+            setEditingQuest(null)
+        } catch (error) {
+            toast.error("Failed to save quest changes")
+        }
     }
 
-    const handleToggleSubtask = async (category: "plans" | "dailies" | "habits", questId: number, subtaskId: string) => {
+    const handleToggleSubtask = async (category: "plans" | "dailies" | "habits", questId: number | string, subtaskId: string) => {
         const newQuests = JSON.parse(JSON.stringify(quests))
         const qIdx = newQuests[category].findIndex((q: any) => q.id === questId)
         if (qIdx !== -1) {
@@ -387,7 +429,7 @@ export function ActiveQuests() {
         else toast.error("Failed to toggle subtask")
     }
 
-    const handlePinQuest = async (category: "plans" | "dailies" | "habits", questId: number, isPinned: boolean) => {
+    const handlePinQuest = async (category: "plans" | "dailies" | "habits", questId: number | string, isPinned: boolean) => {
         const newQuests = JSON.parse(JSON.stringify(quests))
         const qIdx = newQuests[category].findIndex((q: any) => q.id === questId)
         if (qIdx !== -1) {
@@ -416,7 +458,7 @@ export function ActiveQuests() {
     }
 
     // Drag and drop sorting
-    const handleDrop = async (targetQuestId: number, category: "plans" | "dailies" | "habits") => {
+    const handleDrop = async (targetQuestId: number | string, category: "plans" | "dailies" | "habits") => {
         if (!draggedQuest || draggedQuest.category !== category) return
         if (draggedQuest.id === targetQuestId) return
 
@@ -451,7 +493,7 @@ export function ActiveQuests() {
     const getActiveQuests = (category: "plans" | "dailies" | "habits") =>
         quests[category]
             .filter((q: any) => {
-                const isActive = q.archivedAt === null
+                const isActive = (category === 'dailies') ? (q.is_archived !== true) : (q.archivedAt === null)
                 if (!selectedAreas || selectedAreas.length === 0) return isActive
                 return isActive && selectedAreas.includes(q.skill)
             })
@@ -471,8 +513,8 @@ export function ActiveQuests() {
     const getArchivedQuests = (category: "plans" | "dailies" | "habits") =>
         quests[category]
             .filter((q: any) => {
+                const isArchived = (category === 'dailies') ? (q.is_archived === true) : (q.archivedAt !== null)
                 if (selectedAreas?.length && !selectedAreas.includes(q.skill)) return false
-                const isArchived = q.archivedAt !== null
                 if (!selectedAreas || selectedAreas.length === 0) return isArchived
                 return isArchived && selectedAreas.includes(q.skill)
             })
@@ -489,6 +531,11 @@ export function ActiveQuests() {
 
         const isPinned = quest.pinned && !isArchived
         const hasCategory = !!(quest.skill && quest.skill !== "none")
+        
+        // Handle both Legacy (Plans/Habits) and SQL (Dailies)
+        const isCompleted = category === 'dailies' ? (quest.is_completed === true) : (quest.completed === true)
+        const isCurrentArchived = category === 'dailies' ? (quest.is_archived === true) : (quest.archivedAt !== null)
+
         const isHabit = category === "habits" || quest.taskType === "habit" || quest.taskType === "habits" || (quest.weeklyTarget && quest.weeklyTarget > 0);
         const wTarget = isHabit ? (quest.weeklyTarget || 7) : 1;
         const cProgress = isHabit ? (quest.currentWeeklyProgress || 0) : 0;
@@ -496,7 +543,7 @@ export function ActiveQuests() {
         return (
             <div
                 key={quest.id}
-                className={`overflow-hidden ${isArchived ? "opacity-50" : quest.completed ? "opacity-70" : ""} ${isPinned ? "cursor-grab active:cursor-grabbing" : ""} ${draggedQuest?.id === quest.id ? "opacity-50" : ""}`}
+                className={`overflow-hidden ${isCurrentArchived ? "opacity-50" : isCompleted ? "opacity-70" : ""} ${isPinned ? "cursor-grab active:cursor-grabbing" : ""} ${draggedQuest?.id === quest.id ? "opacity-50" : ""}`}
                 draggable={isPinned}
                 onDragStart={isPinned ? () => setDraggedQuest({ id: quest.id, category }) : undefined}
                 onDragEnd={() => setDraggedQuest(null)}
@@ -574,12 +621,12 @@ export function ActiveQuests() {
                                         onClick={() => {
                                             if (!isArchived) {
                                                 if (cProgress >= wTarget) return; // Disabled if already completed weekly target
-                                                handleToggleQuest(category, quest.id, quest.xp, quest.completed, quest.title, quest.skill)
+                                                handleToggleQuest(category, quest.id, quest.xp, isCompleted, quest.title, quest.skill)
                                             }
                                         }}
-                                        className={`flex items-center justify-center w-5 h-5 rounded-md border ${quest.completed ? "bg-orange-500 border-orange-500" : "border-orange-500/50"} ${(isArchived || cProgress >= wTarget) ? "opacity-50 cursor-default" : "cursor-pointer hover:bg-orange-500/20"}`}
+                                        className={`flex items-center justify-center w-5 h-5 rounded-md border ${isCompleted ? "bg-orange-500 border-orange-500" : "border-orange-500/50"} ${(isArchived || cProgress >= wTarget) ? "opacity-50 cursor-default" : "cursor-pointer hover:bg-orange-500/20"}`}
                                     >
-                                        {quest.completed ? (
+                                        {isCompleted ? (
                                             <Check className="h-3 w-3 text-white" />
                                         ) : (
                                             <Plus className="h-3 w-3 text-orange-500" />
@@ -588,9 +635,9 @@ export function ActiveQuests() {
                                 </div>
                             ) : (
                                 <Checkbox
-                                    checked={quest.completed}
+                                    checked={isCompleted}
                                     onCheckedChange={() => {
-                                        handleToggleQuest(category, quest.id, quest.xp, quest.completed, quest.title, quest.skill)
+                                        handleToggleQuest(category, quest.id, quest.xp, isCompleted, quest.title, quest.skill)
                                     }}
                                     className="h-5 w-5 border border-gray-300"
                                     disabled={isArchived}
@@ -628,7 +675,7 @@ export function ActiveQuests() {
                                 </div>
                             )}
 
-                            {quest.completed && !isArchived && (
+                            {isCompleted && !isArchived && (
                                 <div style={{ paddingTop: "8px" }}>
                                     <button
                                         onClick={(e) => { e.stopPropagation(); handleArchiveQuest(category, quest.id, quest.title) }}
@@ -782,7 +829,10 @@ export function ActiveQuests() {
                                     </div>
                                     <div className="space-y-2">
                                         <Label htmlFor="reset-time">Reset Time (UTC)</Label>
-                                        <Select value={(editingQuest.resetTime || "00:00")} onValueChange={(value) => setEditingQuest({ ...editingQuest, resetTime: value })}>
+                                        <Select 
+                                            value={(editingQuest.reset_time || editingQuest.resetTime || "00:00")} 
+                                            onValueChange={(value) => setEditingQuest({ ...editingQuest, resetTime: value, reset_time: value })}
+                                        >
                                             <SelectTrigger id="reset-time" className="bg-input"><SelectValue /></SelectTrigger>
                                             <SelectContent>{[...Array(24)].map((_, h) => { const label = `${String(h).padStart(2, "0")}:00`; return (<SelectItem key={label} value={label}>{label}</SelectItem>) })}</SelectContent>
                                         </Select>

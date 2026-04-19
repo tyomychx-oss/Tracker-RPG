@@ -46,9 +46,94 @@ export async function updateProfile(updates: Partial<UserProfile>) {
 
 /**
  * Specifically updates the quests JSON object in the user profile.
+ * (Used for Plans and Habits)
  */
 export async function updateQuests(quests: UserProfile["quests"]) {
   return updateProfile({ quests })
+}
+
+/**
+ * Fetches quests from the dedicated 'quests' table.
+ * (Used for Dailies)
+ */
+export async function getQuestsTable(userId: string) {
+  const { data, error } = await supabase
+    .from("quests")
+    .select("*")
+    .eq("user_id", userId)
+  
+  if (error) {
+    console.error("Failed to fetch quests from table:", error)
+    return []
+  }
+  return data
+}
+
+/**
+ * Maps a Quest object to valid SQL columns for the 'quests' table.
+ * Strips out legacy JSONB and UI-specific fields.
+ */
+function mapQuestToSql(quest: Partial<Quest>) {
+  const payload: any = {}
+  
+  if (quest.id !== undefined) payload.id = quest.id
+  if (quest.category !== undefined) payload.category = quest.category
+  if (quest.title !== undefined) payload.title = quest.title
+  if (quest.skill !== undefined) payload.skill = quest.skill
+  if (quest.xp !== undefined) payload.xp = quest.xp
+  if (quest.rating !== undefined) payload.rating = quest.rating
+  if (quest.is_completed !== undefined) payload.is_completed = quest.is_completed
+  if (quest.is_archived !== undefined) payload.is_archived = quest.is_archived
+  if (quest.last_completed_at !== undefined) payload.last_completed_at = quest.last_completed_at
+  if (quest.frequency_count !== undefined) payload.frequency_count = quest.frequency_count
+  if (quest.frequency_period_days !== undefined) payload.frequency_period_days = quest.frequency_period_days
+  if (quest.reset_time !== undefined) payload.reset_time = quest.reset_time
+  
+  // Map legacy fields if they are the only ones present
+  if (payload.is_completed === undefined && quest.completed !== undefined) {
+    payload.is_completed = quest.completed
+  }
+  if (payload.frequency_count === undefined && quest.frequencyCount !== undefined) {
+    payload.frequency_count = quest.frequencyCount
+  }
+  if (payload.frequency_period_days === undefined && quest.frequencyPeriodDays !== undefined) {
+    payload.frequency_period_days = quest.frequencyPeriodDays
+  }
+  if (payload.reset_time === undefined && quest.resetTime !== undefined) {
+    payload.reset_time = quest.resetTime
+  }
+
+  return payload
+}
+
+/**
+ * Performs a batch update or individual update to the 'quests' table.
+ */
+export async function updateQuestsTable(updates: any[]) {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) throw new Error("Unauthorized")
+
+  // SANITIZE PAYLOAD: Only send valid SQL columns
+  const sanitizedUpdates = updates.map(u => ({ 
+    ...mapQuestToSql(u), 
+    user_id: session.user.id 
+  }))
+
+  const { data, error } = await supabase
+    .from("quests")
+    .upsert(sanitizedUpdates)
+    .select()
+
+  if (error) {
+    console.error("Failed to update quests table:", {
+      message: error.message,
+      details: error.details,
+      code: error.code,
+      hint: error.hint
+    })
+    throw error
+  }
+  return data
 }
 
 /**
@@ -89,14 +174,14 @@ export async function syncQuestCompletion({
   xpState
 }: {
   category: "plans" | "dailies" | "habits"
-  questId: number
+  questId: number | string
   isCompleted: boolean
   xpChange: number
   sparkChange: number
   skillName: string
   newQuestData: UserProfile["quests"]
   newActivities: UserProfile["activities"]
-  newSnapshots: Record<number, TaskStateSnapshot>
+  newSnapshots: Record<string | number, TaskStateSnapshot>
   xpState: { totalXP: number, currentLevel: number, maxXP: number }
 }) {
   const { data: { session } } = await supabase.auth.getSession()
@@ -133,6 +218,15 @@ export async function syncQuestCompletion({
 
   if (error) throw error
 
+  // --- SQL TABLE SYNC (If category is backed by a table) ---
+  if (category === 'dailies') {
+    // Find the specific daily quest and sync it to the 'quests' table
+    const dailyQuest = newQuestData.dailies.find((q: any) => q.id === questId)
+    if (dailyQuest) {
+      await updateQuestsTable([dailyQuest])
+    }
+  }
+
   return {
     quests: newQuestData,
     activities: newActivities,
@@ -141,6 +235,19 @@ export async function syncQuestCompletion({
     skillXPs,
     sparks: newSparks
   }
+}
+
+/**
+ * Deletes a quest from the dedicated table.
+ */
+export async function deleteQuestTable(questId: string | number) {
+  const { error } = await supabase
+    .from("quests")
+    .delete()
+    .eq("id", questId)
+  
+  if (error) throw error
+  return true
 }
 
 /**

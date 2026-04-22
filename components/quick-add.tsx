@@ -70,13 +70,15 @@ export function QuickAdd() {
     const handleAddTask = async () => {
         if (!taskName.trim()) return
 
+        const isSqlTask = taskType === "dailies" || taskType === "habits"
         const base = {
-            id: Date.now(),
+            id: isSqlTask ? crypto.randomUUID() : Date.now(),
             title: taskName,
             skill: taskSkill === "none" ? "" : taskSkill,
             xp: Number(taskXP || "25"),
             rating: taskPriority || "short",
             completed: false,
+            is_archived: false,
             archivedAt: null,
             lastCompletedDate: null,
             pinned: false,
@@ -100,6 +102,7 @@ export function QuickAdd() {
             base.streak = 0
             base.weeklyTarget = Number(habitWeeklyTarget || "3")
             base.currentWeeklyProgress = 0
+            base.category = "habits"
         }
 
         const newQuests = JSON.parse(JSON.stringify(quests))
@@ -110,25 +113,27 @@ export function QuickAdd() {
             ...activities
         ]
 
-        // 1. SPLIT LOGIC: Dailies go to SQL Table, Others to JSONB
-        if (taskType === "dailies") {
+        // 1. SPLIT LOGIC: Dailies and Habits go to SQL Table, Others to JSONB
+        if (taskType === "dailies" || taskType === "habits") {
             const sqlPayload = {
-                category: 'dailies' as const,
+                id: base.id,
+                category: taskType,
                 title: taskName,
                 skill: taskSkill === "none" ? "" : taskSkill,
                 xp: Number(taskXP || "25"),
                 rating: taskPriority || "short",
-                frequency_count: Number(dailyCount || "1"),
-                frequency_period_days: Number(dailyPeriodDays || "1"),
-                reset_time: dailyResetTime || "00:00",
+                frequency_count: taskType === "dailies" ? Number(dailyCount || "1") : Number(habitWeeklyTarget || "3"),
+                frequency_period_days: taskType === "dailies" ? Number(dailyPeriodDays || "1") : 7,
+                reset_time: taskType === "dailies" ? (dailyResetTime || "00:00") : "00:00",
                 is_completed: false,
                 is_archived: false,
                 last_completed_at: null,
-                id: crypto.randomUUID()
+                streak: 0,
+                completed_count: 0
             }
 
             // OPTIMISTIC UPDATE
-            const newQuests = { ...quests, dailies: [...quests.dailies, sqlPayload] }
+            const newQuests = { ...quests, [taskType]: [...quests[taskType], sqlPayload] }
             setQuests(newQuests)
             setActivities(newActivities as any)
             setLastUpdated(Date.now())
@@ -142,7 +147,7 @@ export function QuickAdd() {
                 setSubtasks([])
                 sessionStorage.removeItem(DRAFT_KEY)
             } catch (err) {
-                console.error("Failed to add SQL daily:", err)
+                console.error(`Failed to add SQL ${taskType}:`, err)
             }
         } else {
             // ORIGINAL JSONB LOGIC for Plans and Habits
@@ -258,21 +263,7 @@ export function QuickAdd() {
                     </div>
 
                     {taskType === "dailies" && (
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="task-count" className="text-foreground">Times</Label>
-                                <Select value={dailyCount} onValueChange={setDailyCount}>
-                                    <SelectTrigger id="task-count" className="bg-input"><SelectValue /></SelectTrigger>
-                                    <SelectContent>{[...Array(10)].map((_, i) => (<SelectItem key={i + 1} value={String(i + 1)}>{i + 1}</SelectItem>))}</SelectContent>
-                                </Select>
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="task-period" className="text-foreground">Per days</Label>
-                                <Select value={dailyPeriodDays} onValueChange={setDailyPeriodDays}>
-                                    <SelectTrigger id="task-period" className="bg-input"><SelectValue /></SelectTrigger>
-                                    <SelectContent>{[...Array(14)].map((_, i) => (<SelectItem key={i + 1} value={String(i + 1)}>{i + 1}</SelectItem>))}</SelectContent>
-                                </Select>
-                            </div>
+                        <div className="grid grid-cols-1 gap-4">
                             <div className="space-y-2">
                                 <Label htmlFor="task-reset" className="text-foreground">Reset Time (UTC)</Label>
                                 <Select value={dailyResetTime} onValueChange={setDailyResetTime}>

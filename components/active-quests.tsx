@@ -11,10 +11,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Pencil, ChevronDown, ChevronUp, Trash2, Plus, X, Zap, Pin, PinOff, GripVertical, Flame, Check, RotateCcw } from "lucide-react"
+import { Pencil, ChevronDown, ChevronUp, Trash2, Plus, Minus, X, Zap, Pin, PinOff, GripVertical, Flame, Check, RotateCcw } from "lucide-react"
 import { useXP, useAreaColors, useAreaFilter, useRecentActivity, useUIColor, useAreaXP, useQuests, useSparks, useAreas } from "@/components/providers"
 import { createClient } from "@/utils/supabase/client"
-import { syncQuestCompletion, updateQuests, updateProfile, deleteQuestTable, updateQuestsTable } from "@/lib/supabase-actions"
+import { syncQuestCompletion, updateQuests, updateProfile, deleteQuestFromTable, updateQuestsTable } from "@/lib/supabase-actions"
 import { addXPToState, removeXPFromState } from "@/lib/rpg-logic"
 import { toast } from "sonner"
 
@@ -66,8 +66,31 @@ export function ActiveQuests() {
 
         let newQuests = JSON.parse(JSON.stringify(quests));
         const qIdx = newQuests[category].findIndex((q: any) => q.id === questId);
-        if (qIdx !== -1 && newQuests[category][qIdx].currentWeeklyProgress > 0) {
-            newQuests[category][qIdx].currentWeeklyProgress -= 1;
+        
+        if (qIdx !== -1) {
+            const q = newQuests[category][qIdx];
+            if ((q.completed_count || q.currentWeeklyProgress || 0) > 0) {
+                if (q.completed_count !== undefined) {
+                    q.completed_count -= 1;
+                    const wTarget = q.frequency_count ?? q.weeklyTarget ?? 7;
+                    if (q.completed_count < wTarget) {
+                        if (q.is_completed === true || q.completed === true) {
+                            q.streak = Math.max(0, (q.streak || 0) - 1);
+                        }
+                        q.is_completed = false;
+                        q.completed = false;
+                    }
+                }
+                if (q.currentWeeklyProgress !== undefined) {
+                    q.currentWeeklyProgress -= 1;
+                    const wTarget = q.weeklyTarget ?? 7;
+                    if (q.currentWeeklyProgress < wTarget) {
+                        q.completed = false;
+                    }
+                }
+            } else {
+                return;
+            }
         } else {
             return;
         }
@@ -154,23 +177,21 @@ export function ActiveQuests() {
 
             const qIdx = newQuests[category].findIndex((q: any) => q.id === questId)
             if (qIdx !== -1) {
-                if (category === "dailies") {
-                    newQuests[category][qIdx].is_completed = false
-                    newQuests[category][qIdx].completed_count = Math.max(0, (newQuests[category][qIdx].completed_count || 0) - 1)
-                    // If we uncomplete, we usually don't clear last_completed_at 
-                    // unless we want to reset the cycle, but let's clear it 
-                    // if it was the ONLY completion. Actually, let's just 
-                    // keep it as is, or clear it if completed_count is 0.
-                    if (newQuests[category][qIdx].completed_count === 0) {
-                        newQuests[category][qIdx].last_completed_at = null
+                const q = newQuests[category][qIdx]
+                if (category === "dailies" || (category === "habits" && q.is_completed !== undefined)) {
+                    if (category === "habits" && (q.is_completed === true)) {
+                        q.streak = Math.max(0, (q.streak || 0) - 1)
                     }
+                    q.is_completed = false
+                    q.completed_count = Math.max(0, (q.completed_count || 0) - 1)
+                    if (q.completed_count === 0) q.last_completed_at = null
                 } else {
-                    newQuests[category][qIdx].completed = false
-                    newQuests[category][qIdx].lastCompletedDate = null
+                    q.completed = false
+                    q.lastCompletedDate = null
                     if (isHabit) {
-                        const wTarget = newQuests[category][qIdx].weeklyTarget || 7;
-                        newQuests[category][qIdx].streak = Math.max(0, (newQuests[category][qIdx].streak || 0) - 1)
-                        newQuests[category][qIdx].currentWeeklyProgress = Math.max(0, wTarget - 1)
+                        const wTarget = q.weeklyTarget || 7;
+                        q.streak = Math.max(0, (q.streak || 0) - 1)
+                        q.currentWeeklyProgress = Math.max(0, wTarget - 1)
                     }
                 }
             }
@@ -182,31 +203,38 @@ export function ActiveQuests() {
             let cProgress = 1
             
             if (qIdx !== -1) {
+                const q = newQuests[category][qIdx]
                 if (isHabit) {
-                    wTarget = newQuests[category][qIdx].weeklyTarget || 7
-                    cProgress = (newQuests[category][qIdx].currentWeeklyProgress || 0) + 1
-                    newQuests[category][qIdx].currentWeeklyProgress = cProgress
+                    const wTarget = q.frequency_count ?? q.weeklyTarget ?? 7
+                    const cProgress = (q.completed_count ?? q.currentWeeklyProgress ?? 0) + 1
+                    
+                    if (q.completed_count !== undefined) q.completed_count = cProgress
+                    if (q.currentWeeklyProgress !== undefined) q.currentWeeklyProgress = cProgress
 
                     if (cProgress >= wTarget) {
-                        newQuests[category][qIdx].streak = (newQuests[category][qIdx].streak || 0) + 1
-                        newQuests[category][qIdx].completed = true
-                        newQuests[category][qIdx].lastCompletedDate = today
+                        q.streak = (q.streak || 0) + 1
+                        if (q.is_completed !== undefined) q.is_completed = true
+                        else q.completed = true
+                        
+                        const now = new Date().toISOString()
+                        if (q.last_completed_at !== undefined) q.last_completed_at = now
+                        else q.lastCompletedDate = today
                     } else {
                         isIntermediate = true
                     }
                 } else if (category === "dailies") {
-                    const freq = questObj?.frequency_count ?? questObj?.frequencyCount ?? 1
-                    const count = (questObj?.completed_count || 0) + 1
+                    const freq = q.frequency_count ?? q.frequencyCount ?? 1
+                    const count = (q.completed_count || 0) + 1
                     const isTotalCompleted = count >= freq
                     
-                    newQuests[category][qIdx].is_completed = isTotalCompleted
-                    newQuests[category][qIdx].completed_count = count
+                    q.is_completed = isTotalCompleted
+                    q.completed_count = count
                     if (isTotalCompleted) {
-                        newQuests[category][qIdx].last_completed_at = new Date().toISOString()
+                        q.last_completed_at = new Date().toISOString()
                     }
                 } else {
-                    newQuests[category][qIdx].completed = true
-                    newQuests[category][qIdx].lastCompletedDate = today
+                    q.completed = true
+                    q.lastCompletedDate = today
                 }
             }
 
@@ -269,7 +297,7 @@ export function ActiveQuests() {
         ]
 
         try {
-            if (category === "dailies") {
+            if (category === "dailies" || category === "habits") {
                 newQuests[category][qIdx].is_archived = true
                 await updateQuestsTable([newQuests[category][qIdx]])
                 await updateProfile({ activities: newActivities.slice(0, 100) })
@@ -298,15 +326,12 @@ export function ActiveQuests() {
             const questObj = newQuests[category][qIdx];
             questObj.archivedAt = null;
             
-            const isHabit = category === "habits" || questObj.taskType === "habit" || questObj.taskType === "habits" || (questObj.weeklyTarget && questObj.weeklyTarget > 0);
-            
-            if (isHabit) {
-                // Keep the completion state, weekly target progress, and prevent XP rollback for habits
-                shouldDeductXP = false;
-            } else if (category === "dailies") {
+            if (category === "habits" || category === "dailies") {
                 questObj.is_archived = false;
-                shouldDeductXP = false; // Dailies don't deduct XP on unarchive as they are repeatable
+                questObj.archivedAt = null;
+                shouldDeductXP = false;
             } else {
+                questObj.archivedAt = null;
                 questObj.completed = false;
             }
         }
@@ -322,7 +347,7 @@ export function ActiveQuests() {
         }
 
         try {
-            if (category === "dailies") {
+            if (category === "dailies" || category === "habits") {
                 await updateQuestsTable([newQuests[category][qIdx]])
                 await updateProfile({
                     totalXP: newXp.totalXP,
@@ -361,8 +386,8 @@ export function ActiveQuests() {
         ]
 
         try {
-            if (category === "dailies") {
-                await deleteQuestTable(questId)
+            if (category === "dailies" || category === "habits") {
+                await deleteQuestFromTable(questId as string)
                 await updateProfile({ activities: newActivities.slice(0, 100) })
             } else {
                 const { error } = await updateProfile({
@@ -404,7 +429,7 @@ export function ActiveQuests() {
         }
 
         try {
-            if (editingQuest.category === "dailies") {
+            if (editingQuest.category === "dailies" || editingQuest.category === "habits") {
                 await updateQuestsTable([newQuests[editingQuest.category][qIdx]])
             } else {
                 await updateQuests(newQuests)
@@ -450,9 +475,9 @@ export function ActiveQuests() {
             xp: quest.xp,
             rating: quest.rating,
             frequency: quest.frequency,
-            frequencyCount: quest.frequencyCount,
-            frequencyPeriodDays: quest.frequencyPeriodDays,
-            resetTime: quest.resetTime,
+            frequencyCount: quest.frequency_count || quest.frequencyCount,
+            frequencyPeriodDays: quest.frequency_period_days || quest.frequencyPeriodDays,
+            resetTime: quest.reset_time || quest.resetTime,
             subtasks: quest.subtasks || [],
         })
     }
@@ -493,7 +518,7 @@ export function ActiveQuests() {
     const getActiveQuests = (category: "plans" | "dailies" | "habits") =>
         quests[category]
             .filter((q: any) => {
-                const isActive = (category === 'dailies') ? (q.is_archived !== true) : (q.archivedAt === null)
+                const isActive = (category === 'dailies' || category === 'habits') ? (q.is_archived !== true) : (q.archivedAt === null)
                 if (!selectedAreas || selectedAreas.length === 0) return isActive
                 return isActive && selectedAreas.includes(q.skill)
             })
@@ -513,7 +538,7 @@ export function ActiveQuests() {
     const getArchivedQuests = (category: "plans" | "dailies" | "habits") =>
         quests[category]
             .filter((q: any) => {
-                const isArchived = (category === 'dailies') ? (q.is_archived === true) : (q.archivedAt !== null)
+                const isArchived = (category === 'dailies' || category === 'habits') ? (q.is_archived === true) : (q.archivedAt !== null)
                 if (selectedAreas?.length && !selectedAreas.includes(q.skill)) return false
                 if (!selectedAreas || selectedAreas.length === 0) return isArchived
                 return isArchived && selectedAreas.includes(q.skill)
@@ -532,13 +557,13 @@ export function ActiveQuests() {
         const isPinned = quest.pinned && !isArchived
         const hasCategory = !!(quest.skill && quest.skill !== "none")
         
-        // Handle both Legacy (Plans/Habits) and SQL (Dailies)
-        const isCompleted = category === 'dailies' ? (quest.is_completed === true) : (quest.completed === true)
-        const isCurrentArchived = category === 'dailies' ? (quest.is_archived === true) : (quest.archivedAt !== null)
+        // Handle both Legacy (Plans) and SQL (Dailies/Habits)
+        const isCompleted = (category === 'dailies' || category === 'habits') ? (quest.is_completed === true) : (quest.completed === true)
+        const isCurrentArchived = (category === 'dailies' || category === 'habits') ? (quest.is_archived === true) : (quest.archivedAt !== null)
 
-        const isHabit = category === "habits" || quest.taskType === "habit" || quest.taskType === "habits" || (quest.weeklyTarget && quest.weeklyTarget > 0);
-        const wTarget = isHabit ? (quest.weeklyTarget || 7) : 1;
-        const cProgress = isHabit ? (quest.currentWeeklyProgress || 0) : 0;
+        const isHabit = category === "habits" || quest.taskType === "habit" || quest.taskType === "habits" || (quest.weeklyTarget && quest.weeklyTarget > 0) || (quest.category === 'habits');
+        const wTarget = isHabit ? (quest.frequency_count ?? quest.weeklyTarget ?? 7) : 1;
+        const cProgress = isHabit ? (quest.completed_count ?? quest.currentWeeklyProgress ?? 0) : 0;
 
         return (
             <div
@@ -614,17 +639,17 @@ export function ActiveQuests() {
                                             className="flex items-center justify-center w-5 h-5 rounded-md opacity-40 hover:opacity-100 hover:bg-gray-500/20 transition-all text-muted-foreground"
                                             title="Undo progress"
                                         >
-                                            <RotateCcw className="h-3.5 w-3.5" />
+                                            <Minus className="h-3.5 w-3.5" />
                                         </button>
                                     )}
                                     <div
                                         onClick={() => {
                                             if (!isArchived) {
-                                                if (cProgress >= wTarget) return; // Disabled if already completed weekly target
+                                                // Allow toggling even if target hit, to 'uncomplete' or toggle last session
                                                 handleToggleQuest(category, quest.id, quest.xp, isCompleted, quest.title, quest.skill)
                                             }
                                         }}
-                                        className={`flex items-center justify-center w-5 h-5 rounded-md border ${isCompleted ? "bg-orange-500 border-orange-500" : "border-orange-500/50"} ${(isArchived || cProgress >= wTarget) ? "opacity-50 cursor-default" : "cursor-pointer hover:bg-orange-500/20"}`}
+                                        className={`flex items-center justify-center w-5 h-5 rounded-md border ${isCompleted ? "bg-orange-500 border-orange-500" : "border-orange-500/50"} ${(isArchived || (cProgress >= wTarget && !isCompleted)) ? "opacity-50 cursor-default" : "cursor-pointer hover:bg-orange-500/20"}`}
                                     >
                                         {isCompleted ? (
                                             <Check className="h-3 w-3 text-white" />
@@ -811,32 +836,36 @@ export function ActiveQuests() {
                                 <Label htmlFor="xp-amount">Amount of XP</Label>
                                 <Input id="xp-amount" type="number" value={editingQuest.xp} onChange={(e) => setEditingQuest({ ...editingQuest, xp: Number(e.target.value) })} className="bg-input" />
                             </div>
-                            {editingQuest.category === "dailies" && (
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                    <div className="space-y-2">
-                                        <Label htmlFor="frequency-count">Times</Label>
-                                        <Select value={String(editingQuest.frequencyCount ?? 1)} onValueChange={(value) => setEditingQuest({ ...editingQuest, frequencyCount: Number(value) })}>
-                                            <SelectTrigger id="frequency-count" className="bg-input"><SelectValue /></SelectTrigger>
-                                            <SelectContent>{[...Array(10)].map((_, i) => (<SelectItem key={i + 1} value={String(i + 1)}>{i + 1}</SelectItem>))}</SelectContent>
-                                        </Select>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="frequency-period">Per days</Label>
-                                        <Select value={String(editingQuest.frequencyPeriodDays ?? 1)} onValueChange={(value) => setEditingQuest({ ...editingQuest, frequencyPeriodDays: Number(value) })}>
-                                            <SelectTrigger id="frequency-period" className="bg-input"><SelectValue /></SelectTrigger>
-                                            <SelectContent>{[...Array(14)].map((_, i) => (<SelectItem key={i + 1} value={String(i + 1)}>{i + 1}</SelectItem>))}</SelectContent>
-                                        </Select>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="reset-time">Reset Time (UTC)</Label>
-                                        <Select 
-                                            value={(editingQuest.reset_time || editingQuest.resetTime || "00:00")} 
-                                            onValueChange={(value) => setEditingQuest({ ...editingQuest, resetTime: value, reset_time: value })}
-                                        >
-                                            <SelectTrigger id="reset-time" className="bg-input"><SelectValue /></SelectTrigger>
-                                            <SelectContent>{[...Array(24)].map((_, h) => { const label = `${String(h).padStart(2, "0")}:00`; return (<SelectItem key={label} value={label}>{label}</SelectItem>) })}</SelectContent>
-                                        </Select>
-                                    </div>
+                            {(editingQuest.category === "dailies" || editingQuest.category === "habits") && (
+                                <div className="grid grid-cols-1 gap-3">
+                                    {editingQuest.category === "habits" && (
+                                        <div className="space-y-2">
+                                            <Label htmlFor="frequency-count">Times (Target/Week)</Label>
+                                            <Select 
+                                                value={String(editingQuest.frequencyCount ?? 1)} 
+                                                onValueChange={(value) => setEditingQuest({ ...editingQuest, frequencyCount: Number(value) })}
+                                            >
+                                                <SelectTrigger id="frequency-count" className="bg-input"><SelectValue /></SelectTrigger>
+                                                <SelectContent>
+                                                    {[...Array(7)].map((_, i) => (
+                                                        <SelectItem key={i + 1} value={String(i + 1)}>{i + 1}</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    )}
+                                    {editingQuest.category === "dailies" && (
+                                        <div className="space-y-2">
+                                            <Label htmlFor="reset-time">Reset Time (UTC)</Label>
+                                            <Select 
+                                                value={(editingQuest.reset_time || editingQuest.resetTime || "00:00")} 
+                                                onValueChange={(value) => setEditingQuest({ ...editingQuest, resetTime: value, reset_time: value })}
+                                            >
+                                                <SelectTrigger id="reset-time" className="bg-input"><SelectValue /></SelectTrigger>
+                                                <SelectContent>{[...Array(24)].map((_, h) => { const label = `${String(h).padStart(2, "0")}:00`; return (<SelectItem key={label} value={label}>{label}</SelectItem>) })}</SelectContent>
+                                            </Select>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                             <div className="space-y-3 pt-2 border-t border-border">

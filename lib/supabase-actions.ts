@@ -74,36 +74,34 @@ export async function getQuestsTable(userId: string) {
  * Strips out legacy JSONB and UI-specific fields.
  */
 function mapQuestToSql(quest: Partial<Quest>) {
-  const payload: any = {}
+  // ABSOLUTE WHITELIST: Constuct a fresh object with ONLY valid SQL columns
+  const sqlQuest: any = {}
   
-  if (quest.id !== undefined) payload.id = quest.id
-  if (quest.category !== undefined) payload.category = quest.category
-  if (quest.title !== undefined) payload.title = quest.title
-  if (quest.skill !== undefined) payload.skill = quest.skill
-  if (quest.xp !== undefined) payload.xp = quest.xp
-  if (quest.rating !== undefined) payload.rating = quest.rating
-  if (quest.is_completed !== undefined) payload.is_completed = quest.is_completed
-  if (quest.is_archived !== undefined) payload.is_archived = quest.is_archived
-  if (quest.last_completed_at !== undefined) payload.last_completed_at = quest.last_completed_at
-  if (quest.frequency_count !== undefined) payload.frequency_count = quest.frequency_count
-  if (quest.frequency_period_days !== undefined) payload.frequency_period_days = quest.frequency_period_days
-  if (quest.reset_time !== undefined) payload.reset_time = quest.reset_time
+  // REGEX for UUID validation: Ensure we NEVER send a timestamp string or numeric ID to the UUID column
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (quest.id && typeof quest.id === 'string' && uuidRegex.test(quest.id)) {
+      sqlQuest.id = quest.id
+  }
   
-  // Map legacy fields if they are the only ones present
-  if (payload.is_completed === undefined && quest.completed !== undefined) {
-    payload.is_completed = quest.completed
-  }
-  if (payload.frequency_count === undefined && quest.frequencyCount !== undefined) {
-    payload.frequency_count = quest.frequencyCount
-  }
-  if (payload.frequency_period_days === undefined && quest.frequencyPeriodDays !== undefined) {
-    payload.frequency_period_days = quest.frequencyPeriodDays
-  }
-  if (payload.reset_time === undefined && quest.resetTime !== undefined) {
-    payload.reset_time = quest.resetTime
-  }
+  if (quest.title !== undefined) sqlQuest.title = quest.title
+  if (quest.category !== undefined) sqlQuest.category = quest.category
+  if (quest.skill !== undefined) sqlQuest.skill = quest.skill
+  if (quest.xp !== undefined) sqlQuest.xp = quest.xp
+  if (quest.rating !== undefined) sqlQuest.rating = quest.rating
+  
+  // Mapping logic with strict assignment
+  sqlQuest.is_completed = quest.is_completed ?? quest.completed ?? false
+  sqlQuest.is_archived = quest.is_archived ?? false // Explicit default
+  sqlQuest.last_completed_at = quest.last_completed_at ?? (quest.lastCompletedDate ? new Date(quest.lastCompletedDate).toISOString() : null)
+  
+  sqlQuest.frequency_count = quest.frequency_count ?? quest.weeklyTarget ?? quest.frequencyCount ?? 1
+  sqlQuest.frequency_period_days = quest.frequency_period_days ?? quest.frequencyPeriodDays ?? 1
+  sqlQuest.reset_time = quest.reset_time ?? quest.resetTime ?? "00:00"
+  
+  sqlQuest.streak = quest.streak ?? 0
+  sqlQuest.completed_count = quest.completed_count ?? quest.currentWeeklyProgress ?? 0
 
-  return payload
+  return sqlQuest
 }
 
 /**
@@ -125,15 +123,29 @@ export async function updateQuestsTable(updates: any[]) {
     .select()
 
   if (error) {
-    console.error("Failed to update quests table:", {
-      message: error.message,
-      details: error.details,
-      code: error.code,
-      hint: error.hint
-    })
+    console.error('Failed to update quests:', error?.message || error, error?.details);
     throw error
   }
   return data
+}
+
+/**
+ * Permanently deletes a quest from the dedicated 'quests' table.
+ */
+export async function deleteQuestFromTable(questId: string | number) {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) throw new Error("Unauthorized")
+
+  const { error } = await supabase
+    .from("quests")
+    .delete()
+    .eq("id", questId)
+    .eq("user_id", session.user.id)
+
+  if (error) {
+    console.error("Failed to delete quest from table:", error)
+    throw error
+  }
 }
 
 /**
@@ -219,11 +231,11 @@ export async function syncQuestCompletion({
   if (error) throw error
 
   // --- SQL TABLE SYNC (If category is backed by a table) ---
-  if (category === 'dailies') {
-    // Find the specific daily quest and sync it to the 'quests' table
-    const dailyQuest = newQuestData.dailies.find((q: any) => q.id === questId)
-    if (dailyQuest) {
-      await updateQuestsTable([dailyQuest])
+  if (category === 'dailies' || category === 'habits') {
+    // Find the specific quest and sync it to the 'quests' table
+    const quest = newQuestData[category].find((q: any) => q.id === questId)
+    if (quest) {
+      await updateQuestsTable([quest])
     }
   }
 
@@ -237,18 +249,7 @@ export async function syncQuestCompletion({
   }
 }
 
-/**
- * Deletes a quest from the dedicated table.
- */
-export async function deleteQuestTable(questId: string | number) {
-  const { error } = await supabase
-    .from("quests")
-    .delete()
-    .eq("id", questId)
-  
-  if (error) throw error
-  return true
-}
+
 
 /**
  * Completely resets all user progress across multiple tables.

@@ -108,11 +108,13 @@ export function SyncManager({ children }: SyncManagerProps) {
         // Fetch Dailies from dedicated SQL table
         const tableQuests = await getQuestsTable(currentUserId)
         const sqlDailies = tableQuests.filter((q: any) => q.category === 'dailies')
+        const sqlHabits = tableQuests.filter((q: any) => q.category === 'habits')
         
-        // Merge: Dailies from SQL, Plans/Habits from JSON
+        // Merge: SQL categories from table, Plans/Legacy from JSON
         const fetchedQuests = { 
           ...profileQuests, 
-          dailies: sqlDailies 
+          dailies: sqlDailies,
+          habits: sqlHabits
         }
         setQuests(fetchedQuests)
 
@@ -120,26 +122,25 @@ export function SyncManager({ children }: SyncManagerProps) {
         console.log("[Daily Engine] Check started")
         const { updatedQuests, resetCount } = checkAndResetDailies(fetchedQuests)
         
-        if (resetCount > 0) {
-          console.log(`[Daily Engine] Reset ${resetCount} tasks based on frequency/time settings.`)
-          // Update SQL Table for Dailies
-          const dailiesToSync = updatedQuests.dailies.filter((q: any) => {
-            const original = fetchedQuests.dailies.find((od: any) => od.id === q.id)
-            return JSON.stringify(q) !== JSON.stringify(original)
-          })
-          if (dailiesToSync.length > 0) {
-            await updateQuestsTable(dailiesToSync)
+        if (resetCount > 0 || JSON.stringify(updatedQuests) !== JSON.stringify(fetchedQuests)) {
+          if (resetCount > 0) {
+            console.log(`[Daily Engine] Reset ${resetCount} tasks based on frequency/time settings.`)
           }
-          setQuests(updatedQuests)
-        } else if (JSON.stringify(updatedQuests) !== JSON.stringify(fetchedQuests)) {
-          // Sync initialization (e.g. stale completions)
-          const dailiesToSync = updatedQuests.dailies.filter((q: any) => {
-            const original = fetchedQuests.dailies.find((od: any) => od.id === q.id)
-            return JSON.stringify(q) !== JSON.stringify(original)
-          })
-          if (dailiesToSync.length > 0) {
-            await updateQuestsTable(dailiesToSync)
+          
+          // Update SQL Table for both Dailies and Habits
+          const syncTasks = (cat: 'dailies' | 'habits') => {
+            return updatedQuests[cat].filter((q: any) => {
+              const original = fetchedQuests[cat].find((od: any) => od.id === q.id)
+              return JSON.stringify(q) !== JSON.stringify(original)
+            })
           }
+
+          const dailiesToSync = syncTasks('dailies')
+          const habitsToSync = syncTasks('habits')
+          
+          if (dailiesToSync.length > 0) await updateQuestsTable(dailiesToSync)
+          if (habitsToSync.length > 0) await updateQuestsTable(habitsToSync)
+          
           setQuests(updatedQuests)
         }
         setActivities(profile.activities || [])
@@ -249,10 +250,12 @@ export function SyncManager({ children }: SyncManagerProps) {
           console.log("[Sync] Quests table update received via Realtime")
           const tableQuests = await getQuestsTable(userIdState)
           const sqlDailies = tableQuests.filter((q: any) => q.category === 'dailies')
+          const sqlHabits = tableQuests.filter((q: any) => q.category === 'habits')
           
           setQuests(prev => ({
             ...prev,
-            dailies: sqlDailies
+            dailies: sqlDailies,
+            habits: sqlHabits
           }))
         }
       )

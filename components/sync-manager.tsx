@@ -148,12 +148,16 @@ export function SyncManager({ children }: SyncManagerProps) {
         setTaskSnapshots(profile.task_snapshots || {})
         setSparks(profile.sparks || 0)
         
-        const archived = profile.archived_areas || []
-        const allAreaNames = Object.keys(profile.skill_colors || {})
-        const activeAreas = allAreaNames.filter(name => !archived.includes(name))
+        const skillColors = profile.skill_colors || {}
+        const archivedList = Array.isArray(skillColors._archived_list_) ? skillColors._archived_list_ : []
+        
+        setAreaColors(skillColors)
+        
+        const allNames = Object.keys(skillColors).filter(k => k !== '_archived_list_')
+        const activeAreas = allNames.filter(n => !archivedList.includes(n))
         
         setAreas(activeAreas)
-        setArchivedAreas(archived)
+        setArchivedAreas(archivedList)
 
         if (rewardsRes.data) setRewards(rewardsRes.data)
         if (transactionsRes.data) setTransactions(transactionsRes.data)
@@ -203,19 +207,16 @@ export function SyncManager({ children }: SyncManagerProps) {
           if (newData.task_snapshots) setTaskSnapshots(newData.task_snapshots)
           if (newData.skill_xps) setAreaXPs(newData.skill_xps)
           
-          if (newData.skill_colors || newData.archived_areas !== undefined) {
+          if (newData.skill_colors) {
             const updatedColors = newData.skill_colors || {}
-            const updatedArchived = newData.archived_areas || []
+            const archivedList = Array.isArray(updatedColors._archived_list_) ? updatedColors._archived_list_ : []
             
-            if (newData.skill_colors) setAreaColors(updatedColors)
-            if (newData.archived_areas !== undefined) setArchivedAreas(updatedArchived)
+            setAreaColors(updatedColors)
+            setArchivedAreas(archivedList)
             
-            const allNames = Object.keys(updatedColors)
-            const activeAreas = allNames.filter(n => !updatedArchived.includes(n))
-            
-            if (newData.skill_colors) {
-              setAreas(activeAreas)
-            }
+            const allNames = Object.keys(updatedColors).filter(k => k !== '_archived_list_')
+            const activeAreas = allNames.filter(n => !archivedList.includes(n))
+            setAreas(activeAreas)
           }
 
           if (newData.activities) setActivities(newData.activities)

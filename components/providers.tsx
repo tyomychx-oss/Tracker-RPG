@@ -28,8 +28,8 @@ export interface AreaXPContextType {
 }
 
 export interface AreaColorsContextType {
-  areaColors: Record<string, string>
-  setAreaColors: React.Dispatch<React.SetStateAction<Record<string, string>>>
+  areaColors: Record<string, any>
+  setAreaColors: React.Dispatch<React.SetStateAction<Record<string, any>>>
   setAreaColor: (name: string, color: string) => Promise<void>
 }
 
@@ -131,7 +131,7 @@ export interface UserProfile {
   maxXP: number
   sparks: number
   skillXPs: Record<string, number>
-  skillColors: Record<string, string>
+  skillColors: Record<string, any>
   quests: {
     plans: Quest[]
     dailies: Quest[]
@@ -391,7 +391,7 @@ export function AreaXPProvider({ children }: { children: ReactNode }) {
 }
 
 export function AreaColorsProvider({ children }: { children: ReactNode }) {
-  const [areaColors, setAreaColors] = useState<Record<string, string>>({})
+  const [areaColors, setAreaColors] = useState<Record<string, any>>({})
 
   const setAreaColor = async (name: string, color: string) => {
     const { data: { session } } = await supabase.auth.getSession()
@@ -510,83 +510,96 @@ export function AreasProvider({ children }: { children: ReactNode }) {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
 
-    // 1. Optimistic UI update
-    setAreas(prev => prev.filter(a => a !== name))
-    setArchivedAreas(prev => prev.filter(a => a !== name))
+    const { [name]: _, ...remainingColors } = areaColors || {}
+    if (Array.isArray(remainingColors._archived_list_)) {
+      remainingColors._archived_list_ = remainingColors._archived_list_.filter((a: any) => a !== name)
+    }
+    const { [name]: __, ...remainingXPs } = areaXPs || {}
 
-    // 2. FETCH CURRENT DATA FROM DB
-    const { data: profile } = await supabase
-      .from("user_profiles")
-      .select("skill_colors, skill_xps, archived_areas")
-      .eq("user_id", session.user.id)
-      .maybeSingle()
-    
-    if (!profile) return
+    try {
+      const { error } = await supabase
+        .from("user_profiles")
+        .update({ 
+          skill_colors: remainingColors,
+          skill_xps: remainingXPs
+        })
+        .eq("user_id", session.user.id)
+      
+      if (error) {
+        console.error("Supabase Error Details:", error.message, error.details, error.hint);
+        return;
+      }
 
-    const { [name]: _, ...remainingColors } = profile.skill_colors || {}
-    const { [name]: __, ...remainingXPs } = profile.skill_xps || {}
-    const updatedArchived = (profile.archived_areas || []).filter((a: string) => a !== name)
-
-    const { error } = await supabase
-      .from("user_profiles")
-      .update({ 
-        skill_colors: remainingColors,
-        skill_xps: remainingXPs,
-        archived_areas: updatedArchived
-      })
-      .eq("user_id", session.user.id)
-    
-    if (error) console.error("Failed to remove area:", error)
+      // 3. Update local state ONLY on success
+      setAreas(prev => prev.filter(a => a !== name))
+      setArchivedAreas(prev => prev.filter(a => a !== name))
+      setAreaColors(remainingColors)
+      setAreaXPs(remainingXPs)
+    } catch (err: any) {
+      console.error("Cleanup Error:", err.message);
+    }
   }
 
   const archiveArea = async (name: string) => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) return
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) return
 
-      setAreas(prev => prev.filter(a => a !== name))
-      setArchivedAreas(prev => prev.includes(name) ? prev : [...prev, name])
+    const currentColors = { ...areaColors }
+    const archivedList = Array.isArray(currentColors._archived_list_) ? [...currentColors._archived_list_] : []
+    
+    if (!archivedList.includes(name)) {
+      archivedList.push(name)
+    }
+    
+    currentColors._archived_list_ = archivedList
 
-      // 2. FETCH CURRENT DATA FROM DB
-      const { data: profile } = await supabase
-        .from("user_profiles")
-        .select("archived_areas")
-        .eq("user_id", session.user.id)
-        .maybeSingle()
-      
-      const currentArchived = profile?.archived_areas || []
-      const updatedArchived = currentArchived.includes(name) ? currentArchived : [...currentArchived, name]
-
+    try {
       const { error } = await supabase
         .from("user_profiles")
-        .update({ archived_areas: updatedArchived })
+        .update({ skill_colors: currentColors })
         .eq("user_id", session.user.id)
       
-      if (error) console.error("Failed to archive area:", error)
+      if (error) {
+        console.error("Supabase Error Details:", error.message, error.details, error.hint);
+        return;
+      }
+
+      setAreaColors(currentColors)
+      setAreas(prev => prev.filter(a => a !== name))
+      setArchivedAreas(prev => prev.includes(name) ? prev : [...prev, name])
+    } catch (err: any) {
+      console.error("[Archive] Persistence failed:", err.message)
+    }
   }
 
   const unarchiveArea = async (name: string) => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) return
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) return
 
-      setAreas(prev => prev.includes(name) ? prev : [...prev, name])
-      setArchivedAreas(prev => prev.filter(a => a !== name))
+    const currentColors = { ...areaColors }
+    const archivedList = Array.isArray(currentColors._archived_list_) 
+      ? currentColors._archived_list_.filter((a: any) => a !== name) 
+      : []
+    
+    currentColors._archived_list_ = archivedList
 
-      // 2. FETCH CURRENT DATA FROM DB
-      const { data: profile } = await supabase
-        .from("user_profiles")
-        .select("archived_areas")
-        .eq("user_id", session.user.id)
-        .maybeSingle()
-      
-      const currentArchived = profile?.archived_areas || []
-      const updatedArchived = currentArchived.filter((a: string) => a !== name)
-
+    try {
       const { error } = await supabase
         .from("user_profiles")
-        .update({ archived_areas: updatedArchived })
+        .update({ skill_colors: currentColors })
         .eq("user_id", session.user.id)
       
-      if (error) console.error("Failed to unarchive area:", error)
+      if (error) {
+        console.error("Supabase Error Details:", error.message, error.details, error.hint);
+        return;
+      }
+
+      setAreaColors(currentColors)
+      setAreas(prev => prev.includes(name) ? prev : [...prev, name])
+      setArchivedAreas(prev => prev.filter(a => a !== name))
+    } catch (err: any) {
+      console.error("[Unarchive] Persistence failed:", err.message)
+    }
   }
 
   const renameArea = async (oldName: string, newName: string, color: string) => {

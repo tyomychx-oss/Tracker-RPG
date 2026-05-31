@@ -202,7 +202,25 @@ export function SyncManager({ children }: SyncManagerProps) {
               maxXP: newData.max_xp
             })
           }
-          if (newData.quests) setQuests(newData.quests)
+          if (newData.quests) {
+            // Merge: preserve local habits progress to avoid Realtime race conditions
+            setQuests(prev => {
+              const serverHabits = newData.quests.habits || []
+              const mergedHabits = serverHabits.map((serverHabit: any) => {
+                const localHabit = prev.habits.find((h: any) => h.id === serverHabit.id)
+                // Keep local currentWeeklyProgress if it's higher (local update not yet synced)
+                if (localHabit && (localHabit.currentWeeklyProgress || 0) > (serverHabit.currentWeeklyProgress || 0)) {
+                  return { ...serverHabit, currentWeeklyProgress: localHabit.currentWeeklyProgress }
+                }
+                return serverHabit
+              })
+              return {
+                plans: newData.quests.plans || prev.plans,
+                dailies: prev.dailies, // Always keep SQL dailies
+                habits: mergedHabits
+              }
+            })
+          }
           if (newData.task_snapshots) setTaskSnapshots(newData.task_snapshots)
           if (newData.skill_xps) setAreaXPs(newData.skill_xps)
           
